@@ -1,13 +1,10 @@
 use tauri::{AppHandle, command, Runtime};
 
-use crate::models::*;
 use crate::Result;
 use crate::ConfigManagerExt;
 
-#[command]
-pub(crate) async fn ping<R: Runtime>(
-    app: AppHandle<R>,
-    payload: PingRequest,
-) -> Result<PingResponse> {
-    app.config_manager().ping(payload)
+// remember to call `.manage(MyState::default())`
+#[tauri::command]
+pub async fn read_config<R: Runtime>(app: AppHandle<R>) -> Result<String> {
+   app.config_manager().read_config().await
 }
