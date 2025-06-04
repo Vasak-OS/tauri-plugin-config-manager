@@ -1,7 +1,6 @@
 use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 
-
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
     _api: PluginApi<R, C>,
@@ -20,11 +19,28 @@ impl<R: Runtime> ConfigManager<R> {
     pub async fn read_config(&self) -> crate::Result<String> {
         let config_path = Self::home_dir().join(".config/vasak/vasak.conf");
         let config_path = config_path.to_str().ok_or_else(|| {
-            crate::Error::Other("No se pudo convertir la ruta del archivo de configuración a una cadena.".to_string())
+            crate::Error::Other(
+                "No se pudo convertir la ruta del archivo de configuración a una cadena."
+                    .to_string(),
+            )
         })?;
         let config = tokio::fs::read_to_string(config_path)
             .await
             .map_err(|e| crate::Error::Io(e))?;
         Ok(serde_json::from_str(&config).map_err(|e| crate::Error::Json(e))?)
+    }
+
+    pub async fn write_config(&self, config: &str) -> crate::Result<()> {
+        let config_path = Self::home_dir().join(".config/vasak/vasak.conf");
+        let config_path = config_path.to_str().ok_or_else(|| {
+            crate::Error::Other(
+                "No se pudo convertir la ruta del archivo de configuración a una cadena."
+                    .to_string(),
+            )
+        })?;
+        tokio::fs::write(config_path, config)
+            .await
+            .map_err(|e| crate::Error::Io(e))?;
+        Ok(())
     }
 }
