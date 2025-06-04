@@ -1,7 +1,7 @@
 {
-  "name": "tauri-plugin-config-manager-api",
+  "name": "@vasakgroup/plugin-config-manager",
   "version": "0.1.0",
-  "author": "You",
+  "author": "Joaquin (Pato) Decima <jdecima@vasak.net.ar>",
   "description": "",
   "type": "module",
   "types": "./dist-js/index.d.ts",
