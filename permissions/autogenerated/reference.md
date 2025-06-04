@@ -4,7 +4,8 @@ Default permissions for the plugin
 
 #### This default permission set includes the following:
 
-- `allow-ping`
+- `allow-write-config`
+- `allow-read-config`
 
 ## Permission Table
 
@@ -18,12 +19,12 @@ Default permissions for the plugin
 <tr>
 <td>
 
-`config-manager:allow-ping`
+`config-manager:allow-read-config`
 
 </td>
 <td>
 
-Enables the ping command without any pre-configured scope.
+Enables the read_config command without any pre-configured scope.
 
 </td>
 </tr>
@@ -31,12 +32,38 @@ Enables the ping command without any pre-configured scope.
 <tr>
 <td>
 
-`config-manager:deny-ping`
+`config-manager:deny-read-config`
 
 </td>
 <td>
 
-Denies the ping command without any pre-configured scope.
+Denies the read_config command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:allow-write-config`
+
+</td>
+<td>
+
+Enables the write_config command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:deny-write-config`
+
+</td>
+<td>
+
+Denies the write_config command without any pre-configured scope.
 
 </td>
 </tr>
