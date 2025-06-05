@@ -17,7 +17,7 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     pub async fn read_config(&self) -> crate::Result<String> {
-        let config_path = Self::home_dir().join(".config/vasak/vasak.conf");
+        let config_path = self.config_path();
         let config_path = config_path.to_str().ok_or_else(|| {
             crate::Error::Other(
                 "No se pudo convertir la ruta del archivo de configuración a una cadena."
@@ -31,7 +31,7 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
-        let config_path = Self::home_dir().join(".config/vasak/vasak.conf");
+        let config_path = self.config_path();
         let config_path = config_path.to_str().ok_or_else(|| {
             crate::Error::Other(
                 "No se pudo convertir la ruta del archivo de configuración a una cadena."
@@ -42,5 +42,9 @@ impl<R: Runtime> ConfigManager<R> {
             .await
             .map_err(|e| crate::Error::Io(e))?;
         Ok(())
+    }
+
+    pub fn config_path(&self) -> std::path::PathBuf {
+        Self::home_dir().join(".config/vasak/vasak.conf")
     }
 }
