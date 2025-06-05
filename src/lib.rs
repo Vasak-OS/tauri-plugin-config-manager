@@ -49,12 +49,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::write_config
         ])
         .setup(|app, api| {
-            #[cfg(not(desktop))]
-            {
-                return Err(Error::Other(
-                    "This plugin is only available on desktop platforms.".to_string(),
-                ));
-            }
             let config_manager = desktop::init(app, api)?;
             let config_path = config_manager.config_path().to_path_buf();
             app.manage(config_manager);
