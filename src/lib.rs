@@ -1,6 +1,11 @@
-use notify::{event::{DataChange, ModifyKind}, EventKind, Watcher};
+use notify::{
+    event::{DataChange, ModifyKind},
+    EventKind, RecommendedWatcher, Watcher,
+};
+use std::sync::Mutex;
 use tauri::{
-    plugin::{Builder, TauriPlugin}, Emitter, Manager, Runtime
+    plugin::{Builder, TauriPlugin},
+    Emitter, Manager, Runtime,
 };
 
 mod commands;
@@ -30,13 +35,27 @@ fn watch_config_file<R: Runtime + 'static>(
     let app_handle = app.clone();
     Box::new(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else {
-            Error::Other(("Error watching config file: {}").to_string());
+            if let Err(e) = res {
+                eprintln!(
+                    "[Config Watcher Callback] Error watching config file: {:?}",
+                    e
+                );
+            }
             return;
         };
-        if event.kind == EventKind::Modify(ModifyKind::Data(DataChange::Any)) {
+
+        if matches!(
+            event.kind,
+            EventKind::Modify(ModifyKind::Data(DataChange::Any))
+        ) {
             app_handle.emit("config-changed", ()).unwrap_or_else(|e| {
-                Error::Other(format!("Failed to emit config-changed event: {}", e));
+                eprintln!(
+                    "[Config Watcher Callback] Failed to emit config-changed event: {}",
+                    e
+                );
             });
+        } else {
+            println!("[Config Watcher Callback] Event kind {:?} did not match Modify(Data(Any)). Full event: {:?}", event.kind, event);
         }
     })
 }
@@ -53,15 +72,25 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let config_path = config_manager.config_path().to_path_buf();
             app.manage(config_manager);
 
-            let mut config_file_watcher = notify::recommended_watcher(watch_config_file(app))
-                .expect("Cannot create watcher for config file");
+            let app_handle_for_watcher = app.clone();
+            let event_handler = watch_config_file(&app_handle_for_watcher);
 
-            config_file_watcher
-                .watch(
-                    config_path.as_path(),
-                    notify::RecursiveMode::Recursive,
-                )
-                .unwrap();
+            let mut watcher: RecommendedWatcher = notify::recommended_watcher(event_handler)
+                .map_err(|e| {
+                    Error::Other(format!("Cannot create watcher for config file: {}", e))
+                })?;
+
+            watcher
+                .watch(config_path.as_path(), notify::RecursiveMode::Recursive)
+                .map_err(|e| {
+                    Error::Other(format!(
+                        "Failed to watch config file {}: {}",
+                        config_path.display(),
+                        e
+                    ))
+                })?;
+
+            app.manage(Mutex::new(watcher));
 
             Ok(())
         })
