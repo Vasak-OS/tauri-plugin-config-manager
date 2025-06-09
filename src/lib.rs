@@ -54,8 +54,6 @@ fn watch_config_file<R: Runtime + 'static>(
                     e
                 );
             });
-        } else {
-            println!("[Config Watcher Callback] Event kind {:?} did not match Modify(Data(Any)). Full event: {:?}", event.kind, event);
         }
     })
 }
