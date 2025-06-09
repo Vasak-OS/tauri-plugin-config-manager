@@ -1,23 +1,34 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export async function writeConfig(value: VSKConfig): Promise<void> {
-  await invoke<{ value?: string }>("plugin:config-manager|write_config", {
-    payload: {
-      value,
-    },
+  await invoke("plugin:config-manager|write_config", {
+    payload: JSON.stringify(value), // Serializar VSKConfig y enviarlo como 'payload'
   });
 }
 
-export async function readConfig(): Promise<string | null> {
-  return await invoke<{ value?: string }>(
+export async function readConfig(): Promise<VSKConfig | null> {
+  const jsonString = await invoke<string>( // Esperar que invoke resuelva directamente con la cadena JSON
     "plugin:config-manager|read_config"
-  ).then((r) => (r.value ? r.value : null));
+  );
+  if (jsonString) {
+    try {
+      console.log("Config JSON:", jsonString); // Log para depuración
+      return JSON.parse(jsonString) as VSKConfig; // Parsear la cadena JSON
+    } catch (error) {
+      console.error("Failed to parse config JSON:", error, "Raw string:", jsonString);
+      return null;
+    }
+  }
+  return null;
 }
 
 export type VSKConfig = {
   style: {
-    darkMode: boolean;
-    primaryColor: string;
-    borderRadius: number;
+    darkmode: boolean;
+    color: string;
+    radius: number;
+  };
+  info: {
+    logo: string;
   };
 };

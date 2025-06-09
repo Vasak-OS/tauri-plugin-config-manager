@@ -18,29 +18,23 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn read_config(&self) -> crate::Result<String> {
         let config_path = self.config_path();
-        let config_path = config_path.to_str().ok_or_else(|| {
-            crate::Error::Other(
-                "No se pudo convertir la ruta del archivo de configuración a una cadena."
-                    .to_string(),
-            )
-        })?;
-        let config = tokio::fs::read_to_string(config_path)
+        let config_content = tokio::fs::read_to_string(&config_path)
             .await
-            .map_err(|e| crate::Error::Io(e))?;
-        Ok(serde_json::from_str(&config).map_err(|e| crate::Error::Json(e))?)
+            .map_err(|e| crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to read config file {}: {}", config_path.display(), e),
+            )))?;
+        Ok(config_content)
     }
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
         let config_path = self.config_path();
-        let config_path = config_path.to_str().ok_or_else(|| {
-            crate::Error::Other(
-                "No se pudo convertir la ruta del archivo de configuración a una cadena."
-                    .to_string(),
-            )
-        })?;
-        tokio::fs::write(config_path, config)
+        tokio::fs::write(&config_path, config)
             .await
-            .map_err(|e| crate::Error::Io(e))?;
+            .map_err(|e| crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to write to config file {}: {}", config_path.display(), e),
+            )))?;
         Ok(())
     }
 
