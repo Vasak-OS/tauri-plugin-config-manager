@@ -1,8 +1,8 @@
 {
   "name": "@vasakgroup/plugin-config-manager",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "author": "Joaquin (Pato) Decima <jdecima@vasak.net.ar>",
-  "description": "",
+  "description": "A tauri plugin for managing configuration in a Vue 3 application using Pinia.",
   "type": "module",
   "types": "./dist-js/index.d.ts",
   "main": "./dist-js/index.cjs",

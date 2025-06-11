@@ -14,7 +14,6 @@ export async function readConfig(): Promise<VSKConfig | null> {
   );
   if (jsonString) {
     try {
-      console.log("Config JSON:", jsonString); // Log para depuración
       return JSON.parse(jsonString) as VSKConfig; // Parsear la cadena JSON
     } catch (error) {
       console.error("Failed to parse config JSON:", error, "Raw string:", jsonString);
@@ -27,7 +26,7 @@ export async function readConfig(): Promise<VSKConfig | null> {
 export type VSKConfig = {
   style: {
     darkmode: boolean;
-    color: string;
+    primarycolor: string;
     radius: number;
   };
   info: {
@@ -40,16 +39,12 @@ export const useConfigStore = defineStore("config", () => {
 
   const loadConfig = async () => {
     config.value = await readConfig();
-    if (config.value === null) {
-      console.error("Failed to load configuration");
-      return;
-    }
     setMode();
     setProperties();
   };
 
   const setMode = () => {
-    if (config.value?.style.darkmode) {
+    if (config.value?.style?.darkmode) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
@@ -57,22 +52,26 @@ export const useConfigStore = defineStore("config", () => {
   };
 
   const setProperties = () => {
-    if (config.value) {
-      document.documentElement.style.setProperty(
-        "--primary-color",
-        config.value.style.color || "#4a90e2"
-      );
+    if (config.value?.style) {
+      const { primarycolor, radius } = config.value.style;
+
+      // Manejar primarycolor
+      if (primarycolor && primarycolor.trim() !== "") {
+        document.documentElement.style.setProperty(
+          "--primary-color",
+          primarycolor
+        );
+      }
+
       document.documentElement.style.setProperty(
         "--border-radius",
-        `${config.value.style.radius}px` || "8px"
+        `${radius}px`
       );
     }
   };
 
   return {
     config,
-    loadConfig,
-    setMode,
-    setProperties,
+    loadConfig
   };
 });
