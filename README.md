@@ -31,6 +31,12 @@ fn main() {
 }
 ```
 
+Instala la libreria del cliente:
+
+```bash
+bun install @vasak-group/plugin-config-manager
+```
+
 ## Uso
 
 El plugin expone funciones para interactuar con la configuración desde el frontend.
