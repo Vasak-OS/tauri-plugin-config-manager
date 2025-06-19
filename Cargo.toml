@@ -7,6 +7,10 @@ edition = "2021"
 rust-version = "1.77.2"
 exclude = ["/examples", "/dist-js", "/guest-js", "/node_modules"]
 links = "tauri-plugin-config-manager"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Vasak-OS/tauri-plugin-config-manager"
+readme = "README.md"
+keywords = ["tauri", "plugin", "config", "configuration", "manager"]
 
 [dependencies]
 tauri = { version = "2.5.0" }
