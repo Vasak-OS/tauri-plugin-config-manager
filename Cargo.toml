@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-config-manager"
-version = "2.0.1"
+version = "2.0.2"
 authors = ["Joaquin (Pato) Decima <jdecima@vasak.net.ar>", "Vasak Group"]
 description = "A Tauri plugin for managing configuration for Vasak applications."
 edition = "2021"
@@ -13,7 +13,7 @@ readme = "README.md"
 keywords = ["tauri", "plugin", "config", "configuration", "manager"]
 
 [dependencies]
-tauri = { version = "2.5" }
+tauri = { version = "2" }
 serde = "1.0"
 thiserror = "2"
 tokio = "1.45.1"
@@ -22,4 +22,4 @@ dirs-next = "2.0.0"
 notify = "8.0.0"
 
 [build-dependencies]
-tauri-plugin = { version = "2.3", features = ["build"] }
+tauri-plugin = { version = "2", features = ["build"] }
