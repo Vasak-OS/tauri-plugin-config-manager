@@ -8,6 +8,12 @@ export async function writeConfig(value: VSKConfig): Promise<void> {
   });
 }
 
+export async function setDarkMode(darkmode: boolean): Promise<void> {
+  await invoke("plugin:config-manager|set_darkmode", {
+    payload: JSON.stringify({ darkmode }),
+  });
+}
+
 export async function readConfig(): Promise<VSKConfig | null> {
   const jsonString = await invoke<string>( // Esperar que invoke resuelva directamente con la cadena JSON
     "plugin:config-manager|read_config"
