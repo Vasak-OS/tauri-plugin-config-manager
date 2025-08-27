@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-config-manager"
-version = "2.0.3"
+version = "2.0.4"
 authors = ["Joaquin (Pato) Decima <jdecima@vasak.net.ar>", "Vasak Group"]
 description = "A Tauri plugin for managing configuration for Vasak applications."
 edition = "2021"
