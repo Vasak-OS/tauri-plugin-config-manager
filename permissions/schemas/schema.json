@@ -307,6 +307,18 @@
           "markdownDescription": "Denies the read_config command without any pre-configured scope."
         },
         {
+          "description": "Enables the set_darkmode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-darkmode",
+          "markdownDescription": "Enables the set_darkmode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_darkmode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-darkmode",
+          "markdownDescription": "Denies the set_darkmode command without any pre-configured scope."
+        },
+        {
           "description": "Enables the write_config command without any pre-configured scope.",
           "type": "string",
           "const": "allow-write-config",
@@ -319,10 +331,10 @@
           "markdownDescription": "Denies the write_config command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`"
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`"
         }
       ]
     }

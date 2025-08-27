@@ -6,6 +6,7 @@ Default permissions for the plugin
 
 - `allow-write-config`
 - `allow-read-config`
+- `allow-set-darkmode`
 
 ## Permission Table
 
@@ -38,6 +39,32 @@ Enables the read_config command without any pre-configured scope.
 <td>
 
 Denies the read_config command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:allow-set-darkmode`
+
+</td>
+<td>
+
+Enables the set_darkmode command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:deny-set-darkmode`
+
+</td>
+<td>
+
+Denies the set_darkmode command without any pre-configured scope.
 
 </td>
 </tr>
