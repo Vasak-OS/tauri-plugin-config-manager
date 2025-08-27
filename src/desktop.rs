@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 
@@ -10,6 +11,24 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 
 /// Access to the config-manager APIs.
 pub struct ConfigManager<R: Runtime>(AppHandle<R>);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VSKConfig {
+    pub style: Style,
+    pub info: Option<Info>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Style {
+    pub darkmode: bool,
+    pub primarycolor: String,
+    pub radius: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Info {
+    pub logo: String,
+}
 
 impl<R: Runtime> ConfigManager<R> {
     fn home_dir() -> std::path::PathBuf {
@@ -40,5 +59,31 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub fn config_path(&self) -> std::path::PathBuf {
         Self::home_dir().join(".config/vasak/vasak.conf")
+    }
+
+    pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
+        let config_path = self.config_path();
+        let config_content = tokio::fs::read_to_string(&config_path)
+            .await
+            .map_err(|e| crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to read config file {}: {}", config_path.display(), e),
+            )))?;
+
+        let mut config: VSKConfig = serde_json::from_str(&config_content)
+            .map_err(|e| crate::Error::Json(e))?;
+
+        config.style.darkmode = darkmode;
+
+        let new_content = serde_json::to_string_pretty(&config)
+            .map_err(|e| crate::Error::Json(e))?;
+
+        tokio::fs::write(&config_path, new_content)
+            .await
+            .map_err(|e| crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to write to config file {}: {}", config_path.display(), e),
+            )))?;
+        Ok(())
     }
 }

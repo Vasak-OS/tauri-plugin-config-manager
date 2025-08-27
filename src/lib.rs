@@ -63,7 +63,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("config-manager")
         .invoke_handler(tauri::generate_handler![
             commands::read_config,
-            commands::write_config
+            commands::write_config,
+            commands::set_darkmode
         ])
         .setup(|app, api| {
             let config_manager = desktop::init(app, api)?;
