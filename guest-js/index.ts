@@ -9,9 +9,7 @@ export async function writeConfig(value: VSKConfig): Promise<void> {
 }
 
 export async function setDarkMode(darkmode: boolean): Promise<void> {
-  await invoke("plugin:config-manager|set_darkmode", {
-    payload: JSON.stringify({ darkmode }),
-  });
+  await invoke("plugin:config-manager|set_darkmode", { darkmode });
 }
 
 export async function readConfig(): Promise<VSKConfig | null> {
