@@ -44,5 +44,9 @@
     "management",
     "linux",
     "vasakos"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }
