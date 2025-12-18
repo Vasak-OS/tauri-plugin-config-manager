@@ -38,44 +38,55 @@ export type VSKConfig = {
   };
 };
 
-export const useConfigStore = defineStore("config", () => {
-  const config = ref<VSKConfig | null>(null);
+let configStore: ReturnType<typeof defineStore<"config", () => {
+  config: any;
+  loadConfig: () => Promise<void>;
+}>> | null = null;
 
-  const loadConfig = async () => {
-    config.value = await readConfig();
-    setMode();
-    setProperties();
-  };
+export const useConfigStore = () => {
+  if (!configStore) {
+    configStore = defineStore("config", () => {
+      const config = ref<VSKConfig | null>(null);
 
-  const setMode = () => {
-    if (config.value?.style?.darkmode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  };
+      const loadConfig = async () => {
+        config.value = await readConfig();
+        setMode();
+        setProperties();
+      };
 
-  const setProperties = () => {
-    if (config.value?.style) {
-      const { primarycolor, radius } = config.value.style;
+      const setMode = () => {
+        if (config.value?.style?.darkmode) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      };
 
-      // Manejar primarycolor
-      if (primarycolor && primarycolor.trim() !== "") {
-        document.documentElement.style.setProperty(
-          "--primary-color",
-          primarycolor
-        );
-      }
+      const setProperties = () => {
+        if (config.value?.style) {
+          const { primarycolor, radius } = config.value.style;
 
-      document.documentElement.style.setProperty(
-        "--border-radius",
-        `${radius}px`
-      );
-    }
-  };
+          // Manejar primarycolor
+          if (primarycolor && primarycolor.trim() !== "") {
+            document.documentElement.style.setProperty(
+              "--primary-color",
+              primarycolor
+            );
+          }
 
-  return {
-    config,
-    loadConfig
-  };
-});
+          document.documentElement.style.setProperty(
+            "--border-radius",
+            `${radius}px`
+          );
+        }
+      };
+
+      return {
+        config,
+        loadConfig
+      };
+    });
+  }
+  
+  return configStore();
+};
