@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tauri::{plugin::PluginApi, AppHandle, Emitter, Runtime};
 use tokio::sync::RwLock;
-use tauri::{plugin::PluginApi, AppHandle, Runtime, Emitter};
 
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
@@ -28,7 +28,15 @@ struct CacheEntry {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VSKConfig {
     pub style: Style,
-    pub info: Option<Info>,
+    pub desktop: Option<Desktop>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Desktop {
+    pub wallpaper: Vec<String>,
+    pub iconsize: u32,
+    pub showfiles: bool,
+    pub showhiddenfiles: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,11 +44,6 @@ pub struct Style {
     pub darkmode: bool,
     pub primarycolor: String,
     pub radius: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Info {
-    pub logo: String,
 }
 
 impl<R: Runtime> ConfigManager<R> {
@@ -78,12 +81,16 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Cache inválido o inexistente: leer de disco y actualizar cache.
         let config_path = self.config_path();
-        let config_content = tokio::fs::read_to_string(&config_path)
-            .await
-            .map_err(|e| crate::Error::Io(std::io::Error::new(
+        let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
                 e.kind(),
-                format!("Failed to read config file {}: {}", config_path.display(), e),
-            )))?;
+                format!(
+                    "Failed to read config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+            ))
+        })?;
 
         {
             let mut guard = self.cache.write().await;
@@ -98,12 +105,16 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
         let config_path = self.config_path();
-        tokio::fs::write(&config_path, config)
-            .await
-            .map_err(|e| crate::Error::Io(std::io::Error::new(
+        tokio::fs::write(&config_path, config).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
                 e.kind(),
-                format!("Failed to write to config file {}: {}", config_path.display(), e),
-            )))?;
+                format!(
+                    "Failed to write to config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+            ))
+        })?;
         // Actualizar cache inmediatamente con el contenido provisto
         {
             let mut guard = self.cache.write().await;
@@ -123,27 +134,37 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
         let config_path = self.config_path();
-        let config_content = tokio::fs::read_to_string(&config_path)
-            .await
-            .map_err(|e| crate::Error::Io(std::io::Error::new(
+        let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
                 e.kind(),
-                format!("Failed to read config file {}: {}", config_path.display(), e),
-            )))?;
+                format!(
+                    "Failed to read config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+            ))
+        })?;
 
-        let mut config: VSKConfig = serde_json::from_str(&config_content)
-            .map_err(|e| crate::Error::Json(e))?;
+        let mut config: VSKConfig =
+            serde_json::from_str(&config_content).map_err(|e| crate::Error::Json(e))?;
 
         config.style.darkmode = darkmode;
 
-        let new_content = serde_json::to_string_pretty(&config)
-            .map_err(|e| crate::Error::Json(e))?;
+        let new_content =
+            serde_json::to_string_pretty(&config).map_err(|e| crate::Error::Json(e))?;
 
         tokio::fs::write(&config_path, new_content)
             .await
-            .map_err(|e| crate::Error::Io(std::io::Error::new(
-                e.kind(),
-                format!("Failed to write to config file {}: {}", config_path.display(), e),
-            )))?;
+            .map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to write to config file {}: {}",
+                        config_path.display(),
+                        e
+                    ),
+                ))
+            })?;
         // Actualizar cache con el nuevo contenido
         {
             let mut guard = self.cache.write().await;
@@ -167,12 +188,16 @@ impl<R: Runtime> ConfigManager<R> {
     /// Fuerza refrescar el cache leyendo desde disco.
     pub async fn refresh_cache_from_file(&self) -> crate::Result<()> {
         let config_path = self.config_path();
-        let content = tokio::fs::read_to_string(&config_path)
-            .await
-            .map_err(|e| crate::Error::Io(std::io::Error::new(
+        let content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
                 e.kind(),
-                format!("Failed to read config file {}: {}", config_path.display(), e),
-            )))?;
+                format!(
+                    "Failed to read config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+            ))
+        })?;
         let mut guard = self.cache.write().await;
         *guard = Some(CacheEntry {
             content,

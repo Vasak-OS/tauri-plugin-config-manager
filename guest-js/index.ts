@@ -18,12 +18,8 @@ export async function readConfig(): Promise<VSKConfig | null> {
     try {
       return JSON.parse(jsonString) as VSKConfig;
     } catch (error) {
-      console.error(
-        "Failed to parse config JSON:",
-        error,
-        "Raw string:",
-        jsonString,
-      );
+      console.error("Failed to parse config JSON:", error);
+      console.debug("Config JSON length:", jsonString.length);
       return null;
     }
   }
@@ -75,7 +71,7 @@ export const useConfigStore = () => {
     const setProperties = () => {
       if (config.value?.style) {
         const { primarycolor, radius } = config.value.style;
-        
+
         if (primarycolor && primarycolor.trim() !== "") {
           document.documentElement.style.setProperty(
             "--primary-color",
