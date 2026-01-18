@@ -44,8 +44,7 @@ let configStore: ReturnType<typeof defineStore<"config", () => {
 }>> | null = null;
 
 export const useConfigStore = () => {
-  if (!configStore) {
-    configStore = defineStore("config", () => {
+  configStore ??= defineStore("config", () => {
       const config = ref<VSKConfig | null>(null);
 
       const loadConfig = async () => {
@@ -86,7 +85,6 @@ export const useConfigStore = () => {
         loadConfig
       };
     });
-  }
   
   return configStore();
 };
