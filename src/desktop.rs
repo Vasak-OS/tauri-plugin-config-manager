@@ -174,8 +174,6 @@ impl<R: Runtime> ConfigManager<R> {
                 timestamp: Instant::now(),
             });
         }
-        // Emitir evento de cambio
-        let _ = self.app.emit("config-changed", ());
         Ok(())
     }
 
