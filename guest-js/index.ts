@@ -4,7 +4,7 @@ import { ref } from "vue";
 
 export async function writeConfig(value: VSKConfig): Promise<void> {
   await invoke("plugin:config-manager|write_config", {
-    payload: JSON.stringify(value), // Serializar VSKConfig y enviarlo como 'payload'
+    payload: JSON.stringify(value),
   });
 }
 
@@ -13,10 +13,10 @@ export async function setDarkMode(darkmode: boolean): Promise<void> {
 }
 
 export async function readConfig(): Promise<VSKConfig | null> {
-  const jsonString = await invoke<string>("plugin:config-manager|read_config"); // Esperar que invoke resuelva directamente con la cadena JSON
+  const jsonString = await invoke<string>("plugin:config-manager|read_config");
   if (jsonString) {
     try {
-      return JSON.parse(jsonString) as VSKConfig; // Parsear la cadena JSON
+      return JSON.parse(jsonString) as VSKConfig;
     } catch (error) {
       console.error(
         "Failed to parse config JSON:",
@@ -75,8 +75,7 @@ export const useConfigStore = () => {
     const setProperties = () => {
       if (config.value?.style) {
         const { primarycolor, radius } = config.value.style;
-
-        // Manejar primarycolor
+        
         if (primarycolor && primarycolor.trim() !== "") {
           document.documentElement.style.setProperty(
             "--primary-color",

@@ -48,11 +48,24 @@ fn watch_config_file<R: Runtime + 'static>(
             event.kind,
             EventKind::Modify(ModifyKind::Data(DataChange::Any))
         ) {
-            app_handle.emit("config-changed", ()).unwrap_or_else(|e| {
-                eprintln!(
-                    "[Config Watcher Callback] Failed to emit config-changed event: {}",
-                    e
-                );
+            // Refrescar el caché del plugin leyendo de disco y luego emitir el evento.
+            let app_for_async = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                // Obtener el estado del ConfigManager y actualizar su cache.
+                let state = app_for_async.state::<desktop::ConfigManager<R>>();
+                if let Err(e) = state.inner().refresh_cache_from_file().await {
+                    eprintln!(
+                        "[Config Watcher Callback] Failed to refresh config cache: {}",
+                        e
+                    );
+                }
+                // Emitir evento para frontends
+                app_for_async.emit("config-changed", ()).unwrap_or_else(|e| {
+                    eprintln!(
+                        "[Config Watcher Callback] Failed to emit config-changed event: {}",
+                        e
+                    );
+                });
             });
         }
     })
