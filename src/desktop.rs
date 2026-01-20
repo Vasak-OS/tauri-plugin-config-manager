@@ -13,6 +13,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 }
 
 /// Access to the config-manager APIs with an internal TTL cache.
+#[derive(Clone)]
 pub struct ConfigManager<R: Runtime> {
     app: AppHandle<R>,
     cache: Arc<RwLock<Option<CacheEntry>>>,
