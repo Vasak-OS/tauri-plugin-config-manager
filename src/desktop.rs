@@ -82,6 +82,12 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Cache inválido o inexistente: leer de disco y actualizar cache.
         let config_path = self.config_path();
+        
+        // Si el archivo no existe, crearlo con una configuración por defecto
+        if !config_path.exists() {
+            self.create_default_config().await?;
+        }
+        
         let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -106,6 +112,17 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
         let config_path = self.config_path();
+        
+        // Crear el directorio padre si no existe
+        if let Some(parent) = config_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!("Failed to create config directory {}: {}", parent.display(), e),
+                ))
+            })?;
+        }
+        
         tokio::fs::write(&config_path, config).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -135,6 +152,12 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
         let config_path = self.config_path();
+        
+        // Si el archivo no existe, crearlo con una configuración por defecto
+        if !config_path.exists() {
+            self.create_default_config().await?;
+        }
+        
         let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -187,6 +210,12 @@ impl<R: Runtime> ConfigManager<R> {
     /// Fuerza refrescar el cache leyendo desde disco.
     pub async fn refresh_cache_from_file(&self) -> crate::Result<()> {
         let config_path = self.config_path();
+        
+        // Si el archivo no existe, crearlo con una configuración por defecto
+        if !config_path.exists() {
+            self.create_default_config().await?;
+        }
+        
         let content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -202,6 +231,48 @@ impl<R: Runtime> ConfigManager<R> {
             content,
             timestamp: Instant::now(),
         });
+        Ok(())
+    }
+
+    /// Crea el archivo de configuración con valores por defecto.
+    async fn create_default_config(&self) -> crate::Result<()> {
+        let config_path = self.config_path();
+        
+        // Crear el directorio padre si no existe
+        if let Some(parent) = config_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!("Failed to create config directory {}: {}", parent.display(), e),
+                ))
+            })?;
+        }
+        
+        // Configuración por defecto
+        let default_config = VSKConfig {
+            style: Style {
+                darkmode: false,
+                primarycolor: "#007acc".to_string(),
+                radius: 8,
+            },
+            desktop: Some(Desktop {
+                wallpaper: vec![],
+                iconsize: 48,
+                showfiles: true,
+                showhiddenfiles: false,
+            }),
+        };
+        
+        let config_content = serde_json::to_string_pretty(&default_config)
+            .map_err(|e| crate::Error::Json(e))?;
+        
+        tokio::fs::write(&config_path, &config_content).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to write default config file {}: {}", config_path.display(), e),
+            ))
+        })?;
+        
         Ok(())
     }
 }
