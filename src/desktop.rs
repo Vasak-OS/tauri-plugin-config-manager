@@ -1,5 +1,6 @@
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{plugin::PluginApi, AppHandle, Emitter, Runtime};
@@ -82,12 +83,12 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Cache inválido o inexistente: leer de disco y actualizar cache.
         let config_path = self.config_path();
-        
+
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
             self.create_default_config().await?;
         }
-        
+
         let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -112,17 +113,21 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
         let config_path = self.config_path();
-        
+
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
                 crate::Error::Io(std::io::Error::new(
                     e.kind(),
-                    format!("Failed to create config directory {}: {}", parent.display(), e),
+                    format!(
+                        "Failed to create config directory {}: {}",
+                        parent.display(),
+                        e
+                    ),
                 ))
             })?;
         }
-        
+
         tokio::fs::write(&config_path, config).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -150,14 +155,65 @@ impl<R: Runtime> ConfigManager<R> {
         Self::home_dir().join(".config/vasak/vasak.conf")
     }
 
+    fn run_gsettings(args: &[&str]) -> crate::Result<String> {
+        let output = Command::new("gsettings").args(args).output().map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!("Failed to run gsettings {}: {}", args.join(" "), e),
+            ))
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let detail = if stderr.is_empty() { stdout } else { stderr };
+            return Err(crate::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("gsettings {} failed: {}", args.join(" "), detail),
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
+        let current_scheme_raw =
+            Self::run_gsettings(&["get", "org.gnome.desktop.interface", "color-scheme"])?;
+        let current_scheme = current_scheme_raw
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_string();
+
+        if darkmode && current_scheme != "prefer-dark" {
+            Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "color-scheme",
+                "prefer-dark",
+            ])?;
+            Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "gtk-theme",
+                "Adwaita-dark",
+            ])?;
+        } else if !darkmode && current_scheme != "prefer-light" {
+            Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "color-scheme",
+                "prefer-light",
+            ])?;
+            Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])?;
+        }
+
         let config_path = self.config_path();
-        
+
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
             self.create_default_config().await?;
         }
-        
+
         let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -210,12 +266,12 @@ impl<R: Runtime> ConfigManager<R> {
     /// Fuerza refrescar el cache leyendo desde disco.
     pub async fn refresh_cache_from_file(&self) -> crate::Result<()> {
         let config_path = self.config_path();
-        
+
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
             self.create_default_config().await?;
         }
-        
+
         let content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
@@ -237,17 +293,21 @@ impl<R: Runtime> ConfigManager<R> {
     /// Crea el archivo de configuración con valores por defecto.
     async fn create_default_config(&self) -> crate::Result<()> {
         let config_path = self.config_path();
-        
+
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
                 crate::Error::Io(std::io::Error::new(
                     e.kind(),
-                    format!("Failed to create config directory {}: {}", parent.display(), e),
+                    format!(
+                        "Failed to create config directory {}: {}",
+                        parent.display(),
+                        e
+                    ),
                 ))
             })?;
         }
-        
+
         // Configuración por defecto
         let default_config = VSKConfig {
             style: Style {
@@ -262,17 +322,23 @@ impl<R: Runtime> ConfigManager<R> {
                 showhiddenfiles: false,
             }),
         };
-        
-        let config_content = serde_json::to_string_pretty(&default_config)
-            .map_err(|e| crate::Error::Json(e))?;
-        
-        tokio::fs::write(&config_path, &config_content).await.map_err(|e| {
-            crate::Error::Io(std::io::Error::new(
-                e.kind(),
-                format!("Failed to write default config file {}: {}", config_path.display(), e),
-            ))
-        })?;
-        
+
+        let config_content =
+            serde_json::to_string_pretty(&default_config).map_err(|e| crate::Error::Json(e))?;
+
+        tokio::fs::write(&config_path, &config_content)
+            .await
+            .map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to write default config file {}: {}",
+                        config_path.display(),
+                        e
+                    ),
+                ))
+            })?;
+
         Ok(())
     }
 }
