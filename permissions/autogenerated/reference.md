@@ -7,6 +7,7 @@ Default permissions for the plugin
 - `allow-write-config`
 - `allow-read-config`
 - `allow-set-darkmode`
+- `allow-get-schemes`
 
 ## Permission Table
 
