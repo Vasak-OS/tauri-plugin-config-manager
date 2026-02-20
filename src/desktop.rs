@@ -292,7 +292,7 @@ impl<R: Runtime> ConfigManager<R> {
         let default_config = VSKConfig {
             style: Style {
                 darkmode: false,
-                primarycolor: "#007acc".to_string(),
+                color_scheme: "vasak-default".to_string(),
                 radius: 8,
             },
             desktop: Some(Desktop {

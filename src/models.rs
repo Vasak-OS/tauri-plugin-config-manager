@@ -17,7 +17,8 @@ pub struct Desktop {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Style {
     pub darkmode: bool,
-    pub primarycolor: String,
+    #[serde(rename = "color-scheme")]
+    pub color_scheme: String,
     pub radius: u32,
 }
 

@@ -33,7 +33,7 @@ export async function getSchemes(): Promise<Scheme[]> {
 export type VSKConfig = {
   style: {
     darkmode: boolean;
-    primarycolor: string;
+    "color-scheme": string;
     radius: number;
   };
   desktop: {
@@ -143,12 +143,13 @@ export const useConfigStore = () => {
 
     const setProperties = () => {
       if (config.value?.style) {
-        const { primarycolor, radius } = config.value.style;
+        const { "color-scheme": colorScheme, radius } = config.value.style;
 
-        if (primarycolor && primarycolor.trim() !== "") {
-          document.documentElement.style.setProperty(
-            "--primary-color",
-            primarycolor,
+        // TODO: Remplazar esto por todo el sistema de schemes, lo actual no funciona porque el parametro colorScheme tiene el id del scheme
+        if (colorScheme && colorScheme.trim() !== "") {
+          document.documentElement.setAttribute(
+            "data-color-scheme",
+            colorScheme,
           );
         }
 
