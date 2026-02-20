@@ -26,6 +26,10 @@ export async function readConfig(): Promise<VSKConfig | null> {
   return null;
 }
 
+export async function getSchemes(): Promise<Scheme[]> {
+  return await invoke<Scheme[]>("plugin:config-manager|get_schemes");
+}
+
 export type VSKConfig = {
   style: {
     darkmode: boolean;
@@ -38,6 +42,75 @@ export type VSKConfig = {
     showfiles: boolean;
     showhiddenfiles: boolean;
   };
+};
+
+export type Scheme = {
+  path: string;
+  scheme: SchemeData;
+};
+
+export type SchemeData = {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  version: string;
+  colors: SchemeColors;
+};
+
+export type SchemeColors = {
+  dark: ThemeVariant;
+  ligth: ThemeVariant;
+};
+
+export type ThemeVariant = {
+  ui: UiColors;
+  terminal: TerminalColors;
+};
+
+export type UiColors = {
+  color: ColorPalette;
+  text: TextColors;
+  background: string;
+  border: string;
+  surface: string;
+};
+
+export type ColorPalette = {
+  primary: string;
+  seccondary: string;
+};
+
+export type TextColors = {
+  main: string;
+  muted: string;
+  "on-primary": string;
+};
+
+export type TerminalColors = {
+  foreground: string;
+  background: string;
+  cursor: string;
+  ansi: AnsiColors;
+};
+
+export type AnsiColors = {
+  black: string;
+  red: string;
+  green: string;
+  yellow: string;
+  blue: string;
+  magenta: string;
+  cyan: string;
+  white: string;
+  brightBlack: string;
+  brightRed: string;
+  brightGreen: string;
+  brightYellow: string;
+  brightBlue: string;
+  brightMagenta: string;
+  brightCyan: string;
+  brightWhite: string;
 };
 
 let configStore: ReturnType<
