@@ -12,8 +12,10 @@ mod commands;
 #[cfg(desktop)]
 mod desktop;
 mod error;
+mod models;
 
 pub use error::{Error, Result};
+pub use models::*;
 
 #[cfg(desktop)]
 use desktop::ConfigManager;
