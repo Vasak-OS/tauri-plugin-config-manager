@@ -20,6 +20,32 @@ Default permissions for the plugin
 <tr>
 <td>
 
+`config-manager:allow-get-schemes`
+
+</td>
+<td>
+
+Enables the get_schemes command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:deny-get-schemes`
+
+</td>
+<td>
+
+Denies the get_schemes command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `config-manager:allow-read-config`
 
 </td>

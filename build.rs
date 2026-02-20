@@ -1,4 +1,4 @@
-const COMMANDS: &[&str] = &["read_config", "write_config", "set_darkmode"];
+const COMMANDS: &[&str] = &["read_config", "write_config", "set_darkmode", "get_schemes"];
 
 fn main() {
   tauri_plugin::Builder::new(COMMANDS)
