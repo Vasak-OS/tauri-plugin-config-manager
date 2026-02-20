@@ -48,6 +48,12 @@ pub struct Style {
     pub radius: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Scheme {
+    pub name: String,
+    pub content: serde_json::Value,
+}
+
 impl<R: Runtime> ConfigManager<R> {
     pub fn new(app: AppHandle<R>) -> Self {
         // Default TTL de 30 minutos para evitar lecturas de disco frecuentes.
@@ -178,7 +184,7 @@ impl<R: Runtime> ConfigManager<R> {
 
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
         let current_scheme_raw =
-            Self::run_gsettings(&["get", "org.gnome.desktop.interface", "color-scheme"])?;
+            Self::run_gsettings(&["get", "org.gnome.desktop.interface", "color-scheme"][..])?;
         let current_scheme = current_scheme_raw
             .trim_matches('"')
             .trim_matches('\'')
@@ -190,21 +196,21 @@ impl<R: Runtime> ConfigManager<R> {
                 "org.gnome.desktop.interface",
                 "color-scheme",
                 "prefer-dark",
-            ])?;
+            ][..])?;
             Self::run_gsettings(&[
                 "set",
                 "org.gnome.desktop.interface",
                 "gtk-theme",
                 "Adwaita-dark",
-            ])?;
+            ][..])?;
         } else if !darkmode && current_scheme != "prefer-light" {
             Self::run_gsettings(&[
                 "set",
                 "org.gnome.desktop.interface",
                 "color-scheme",
                 "prefer-light",
-            ])?;
-            Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])?;
+            ][..])?;
+            Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"][..])?;
         }
 
         let config_path = self.config_path();
@@ -340,5 +346,47 @@ impl<R: Runtime> ConfigManager<R> {
             })?;
 
         Ok(())
+    }
+
+    /// Busca y carga todos los esquemas JSON desde /usr/share/vasak-schemes y ~/.config/vasak/schemes
+    pub async fn load_schemes(&self) -> crate::Result<Vec<Scheme>> {
+        let mut schemes = Vec::new();
+
+        // Rutas donde buscar esquemas
+        let system_schemes_path = std::path::PathBuf::from("/usr/share/vasak-schemes");
+        let user_schemes_path = Self::home_dir().join(".config/vasak/schemes");
+
+        // Crear directorios si no existen
+        for path in &[&system_schemes_path, &user_schemes_path] {
+            tokio::fs::create_dir_all(path).await.ok(); // Ignoramos errores de creación (ej: permisos)
+        }
+
+        // Buscar esquemas en ambas ubicaciones
+        for path in &[system_schemes_path, user_schemes_path] {
+            if let Ok(mut entries) = tokio::fs::read_dir(path).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    if let Ok(metadata) = entry.metadata().await {
+                        if metadata.is_file() {
+                            if let Some(filename) = entry.file_name().to_str() {
+                                if filename.ends_with(".json") {
+                                    if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
+                                        if let Ok(json_value) =
+                                            serde_json::from_str::<serde_json::Value>(&content)
+                                        {
+                                            schemes.push(Scheme {
+                                                name: filename.to_string(),
+                                                content: json_value,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(schemes)
     }
 }
