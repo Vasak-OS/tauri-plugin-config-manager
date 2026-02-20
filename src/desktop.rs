@@ -50,8 +50,89 @@ pub struct Style {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Scheme {
+    pub path: String,
+    pub scheme: SchemeData,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SchemeData {
+    pub id: String,
     pub name: String,
-    pub content: serde_json::Value,
+    pub author: String,
+    pub description: String,
+    pub version: String,
+    pub colors: SchemeColors,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SchemeColors {
+    pub dark: ThemeVariant,
+    pub ligth: ThemeVariant,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ThemeVariant {
+    pub ui: UiColors,
+    pub terminal: TerminalColors,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UiColors {
+    pub color: ColorPalette,
+    pub text: TextColors,
+    pub background: String,
+    pub border: String,
+    pub surface: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ColorPalette {
+    pub primary: String,
+    pub seccondary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TextColors {
+    pub main: String,
+    pub muted: String,
+    #[serde(rename = "on-primary")]
+    pub on_primary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TerminalColors {
+    pub foreground: String,
+    pub background: String,
+    pub cursor: String,
+    pub ansi: AnsiColors,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnsiColors {
+    pub black: String,
+    pub red: String,
+    pub green: String,
+    pub yellow: String,
+    pub blue: String,
+    pub magenta: String,
+    pub cyan: String,
+    pub white: String,
+    #[serde(rename = "brightBlack")]
+    pub bright_black: String,
+    #[serde(rename = "brightRed")]
+    pub bright_red: String,
+    #[serde(rename = "brightGreen")]
+    pub bright_green: String,
+    #[serde(rename = "brightYellow")]
+    pub bright_yellow: String,
+    #[serde(rename = "brightBlue")]
+    pub bright_blue: String,
+    #[serde(rename = "brightMagenta")]
+    pub bright_magenta: String,
+    #[serde(rename = "brightCyan")]
+    pub bright_cyan: String,
+    #[serde(rename = "brightWhite")]
+    pub bright_white: String,
 }
 
 impl<R: Runtime> ConfigManager<R> {
@@ -369,13 +450,16 @@ impl<R: Runtime> ConfigManager<R> {
                         if metadata.is_file() {
                             if let Some(filename) = entry.file_name().to_str() {
                                 if filename.ends_with(".json") {
-                                    if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
-                                        if let Ok(json_value) =
-                                            serde_json::from_str::<serde_json::Value>(&content)
+                                    let file_path = entry.path();
+                                    if let Ok(content) = tokio::fs::read_to_string(&file_path).await {
+                                        if let Ok(scheme_data) =
+                                            serde_json::from_str::<SchemeData>(&content)
                                         {
                                             schemes.push(Scheme {
-                                                name: filename.to_string(),
-                                                content: json_value,
+                                                path: file_path
+                                                    .to_string_lossy()
+                                                    .to_string(),
+                                                scheme: scheme_data,
                                             });
                                         }
                                     }
