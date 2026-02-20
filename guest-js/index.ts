@@ -30,6 +30,10 @@ export async function getSchemes(): Promise<Scheme[]> {
   return await invoke<Scheme[]>("plugin:config-manager|get_schemes");
 }
 
+export async function getSchemeById(schemeId: string): Promise<Scheme | null> {
+  return await invoke<Scheme | null>("plugin:config-manager|get_scheme_by_id", { schemeId });
+}
+
 export type VSKConfig = {
   style: {
     darkmode: boolean;

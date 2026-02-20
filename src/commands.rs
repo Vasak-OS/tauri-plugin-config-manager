@@ -24,3 +24,8 @@ pub async fn set_darkmode<R: Runtime>(app: AppHandle<R>, darkmode: bool) -> Resu
 pub async fn get_schemes<R: Runtime>(app: AppHandle<R>) -> Result<Vec<Scheme>> {
     app.config_manager().load_schemes().await
 }
+
+#[command]
+pub async fn get_scheme_by_id<R: Runtime>(app: AppHandle<R>, scheme_id: String) -> Result<Option<Scheme>> {
+    app.config_manager().get_scheme_by_id(&scheme_id).await
+}

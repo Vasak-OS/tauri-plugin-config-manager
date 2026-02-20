@@ -8,6 +8,7 @@ Default permissions for the plugin
 - `allow-read-config`
 - `allow-set-darkmode`
 - `allow-get-schemes`
+- `allow-get-scheme-by-id`
 
 ## Permission Table
 
@@ -17,6 +18,32 @@ Default permissions for the plugin
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`config-manager:allow-get-scheme-by-id`
+
+</td>
+<td>
+
+Enables the get_scheme_by_id command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:deny-get-scheme-by-id`
+
+</td>
+<td>
+
+Denies the get_scheme_by_id command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

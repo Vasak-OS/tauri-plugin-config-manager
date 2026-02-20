@@ -1,3 +1,3 @@
 [default]
 description = "Default permissions for the plugin"
-permissions = ["allow-write-config", "allow-read-config", "allow-set-darkmode", "allow-get-schemes"]
+permissions = ["allow-write-config", "allow-read-config", "allow-set-darkmode", "allow-get-schemes", "allow-get-scheme-by-id"]

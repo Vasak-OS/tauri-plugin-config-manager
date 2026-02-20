@@ -366,4 +366,31 @@ impl<R: Runtime> ConfigManager<R> {
 
         Ok(schemes)
     }
+
+    /// Obtiene un esquema específico por su ID. 
+    /// Si existen dos esquemas con el mismo ID, prioriza el de ~/.config/vasak/schemes
+    pub async fn get_scheme_by_id(&self, scheme_id: &str) -> crate::Result<Option<Scheme>> {
+        let schemes = self.load_schemes().await?;
+        let user_schemes_path = Self::home_dir().join(".config/vasak/schemes");
+
+        // Buscar esquemas que coincidan con el ID
+        let matching_schemes: Vec<Scheme> = schemes
+            .into_iter()
+            .filter(|s| s.scheme.id == scheme_id)
+            .collect();
+
+        if matching_schemes.is_empty() {
+            return Ok(None);
+        }
+
+        // Priorizar el esquema del usuario si existe
+        for scheme in &matching_schemes {
+            if scheme.path.starts_with(&user_schemes_path.to_string_lossy().to_string()) {
+                return Ok(Some(scheme.clone()));
+            }
+        }
+
+        // Si no hay esquema del usuario, devolver el primero encontrado
+        Ok(matching_schemes.into_iter().next())
+    }
 }

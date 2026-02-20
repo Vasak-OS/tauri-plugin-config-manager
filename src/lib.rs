@@ -80,7 +80,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::read_config,
             commands::write_config,
             commands::set_darkmode,
-            commands::get_schemes
+            commands::get_schemes,
+            commands::get_scheme_by_id
         ])
         .setup(|app, api| {
             let config_manager = desktop::init(app, api)?;

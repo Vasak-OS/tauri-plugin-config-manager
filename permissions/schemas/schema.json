@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the get_scheme_by_id command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-scheme-by-id",
+          "markdownDescription": "Enables the get_scheme_by_id command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_scheme_by_id command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-scheme-by-id",
+          "markdownDescription": "Denies the get_scheme_by_id command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_schemes command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-schemes",
@@ -343,10 +355,10 @@
           "markdownDescription": "Denies the write_config command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`\n- `allow-get-schemes`",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`\n- `allow-get-schemes`\n- `allow-get-scheme-by-id`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`\n- `allow-get-schemes`"
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-write-config`\n- `allow-read-config`\n- `allow-set-darkmode`\n- `allow-get-schemes`\n- `allow-get-scheme-by-id`"
         }
       ]
     }
