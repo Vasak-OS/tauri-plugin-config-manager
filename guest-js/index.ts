@@ -64,7 +64,7 @@ export type SchemeData = {
 
 export type SchemeColors = {
   dark: ThemeVariant;
-  ligth: ThemeVariant;
+  light: ThemeVariant;
 };
 
 export type ThemeVariant = {
@@ -82,7 +82,7 @@ export type UiColors = {
 
 export type ColorPalette = {
   primary: string;
-  seccondary: string;
+  secondary: string;
 };
 
 export type TextColors = {
@@ -148,17 +148,267 @@ export const useConfigStore = () => {
     const setProperties = () => {
       if (config.value?.style) {
         const { "color-scheme": colorScheme, radius } = config.value.style;
+        const scheme: Scheme | unknown = getSchemeById(colorScheme) as Scheme | unknown;
 
-        // TODO: Remplazar esto por todo el sistema de schemes, lo actual no funciona porque el parametro colorScheme tiene el id del scheme
-        if (colorScheme && colorScheme.trim() !== "") {
-          document.documentElement.setAttribute(
-            "data-color-scheme",
-            colorScheme,
+        if (scheme !== null) {
+          const darkScheme = (scheme as Scheme).scheme.colors.dark;
+          const lightScheme = (scheme as Scheme).scheme.colors.light;
+
+          // Colores de Marca
+          document.documentElement.style.setProperty(
+            "--primary",
+            lightScheme.ui.color.primary,
+          );
+          document.documentElement.style.setProperty(
+            "--secondary",
+            lightScheme.ui.color.secondary,
+          );
+          document.documentElement.style.setProperty(
+            "--primary-dark",
+            darkScheme.ui.color.primary,
+          );
+          document.documentElement.style.setProperty(
+            "--secondary-dark",
+            darkScheme.ui.color.secondary,
+          );
+
+          // Colores de Interfaz (UI)
+          document.documentElement.style.setProperty(
+            "--ui-background",
+            lightScheme.ui.background,
+          );
+          document.documentElement.style.setProperty(
+            "--ui-surface",
+            lightScheme.ui.surface,
+          );
+          document.documentElement.style.setProperty(
+            "--ui-border",
+            lightScheme.ui.border,
+          );
+          document.documentElement.style.setProperty(
+            "--ui-background-dark",
+            darkScheme.ui.background,
+          );
+          document.documentElement.style.setProperty(
+            "--ui-surface-dark",
+            darkScheme.ui.surface,
+          );
+          document.documentElement.style.setProperty(
+            "--ui-border-dark",
+            darkScheme.ui.border,
+          );
+
+          // Colores de Texto
+          document.documentElement.style.setProperty(
+            "--text-main",
+            lightScheme.ui.text.main,
+          );
+          document.documentElement.style.setProperty(
+            "--text-muted",
+            lightScheme.ui.text.muted,
+          );
+          document.documentElement.style.setProperty(
+            "--text-on-primary",
+            lightScheme.ui.text["on-primary"],
+          );
+          document.documentElement.style.setProperty(
+            "--text-main-dark",
+            darkScheme.ui.text.main,
+          );
+          document.documentElement.style.setProperty(
+            "--text-muted-dark",
+            darkScheme.ui.text.muted,
+          );
+          document.documentElement.style.setProperty(
+            "--text-on-primary-dark",
+            darkScheme.ui.text["on-primary"],
+          );
+
+          // Status Colors
+          document.documentElement.style.setProperty(
+            "--status-error",
+            lightScheme.terminal.ansi.red,
+          );
+          document.documentElement.style.setProperty(
+            "--status-success",
+            lightScheme.terminal.ansi.green,
+          );
+          document.documentElement.style.setProperty(
+            "--status-warning",
+            lightScheme.terminal.ansi.yellow,
+          );
+          document.documentElement.style.setProperty(
+            "--status-error-dark",
+            darkScheme.terminal.ansi.red,
+          );
+          document.documentElement.style.setProperty(
+            "--status-success-dark",
+            darkScheme.terminal.ansi.green,
+          );
+          document.documentElement.style.setProperty(
+            "--status-warning-dark",
+            darkScheme.terminal.ansi.yellow,
+          );
+
+          // Terminal Colors
+          document.documentElement.style.setProperty(
+            "--terminal-foreground",
+            lightScheme.terminal.foreground,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-background",
+            lightScheme.terminal.background,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-cursor",
+            lightScheme.terminal.cursor,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-foreground-dark",
+            darkScheme.terminal.foreground,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-background-dark",
+            darkScheme.terminal.background,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-cursor-dark",
+            darkScheme.terminal.cursor,
+          );
+
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-black",
+            lightScheme.terminal.ansi.black,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-red",
+            lightScheme.terminal.ansi.red,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-green",
+            lightScheme.terminal.ansi.green,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-yellow",
+            lightScheme.terminal.ansi.yellow,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-blue",
+            lightScheme.terminal.ansi.blue,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-magenta",
+            lightScheme.terminal.ansi.magenta,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-cyan",
+            lightScheme.terminal.ansi.cyan,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-white",
+            lightScheme.terminal.ansi.white,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-black",
+            lightScheme.terminal.ansi.brightBlack,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-red",
+            lightScheme.terminal.ansi.brightRed,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-green",
+            lightScheme.terminal.ansi.brightGreen,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-yellow",
+            lightScheme.terminal.ansi.brightYellow,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-blue",
+            lightScheme.terminal.ansi.brightBlue,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-magenta",
+            lightScheme.terminal.ansi.brightMagenta,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-cyan",
+            lightScheme.terminal.ansi.brightCyan,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-white",
+            lightScheme.terminal.ansi.brightWhite,
+          );
+
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-black-dark",
+            darkScheme.terminal.ansi.black,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-red-dark",
+            darkScheme.terminal.ansi.red,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-green-dark",
+            darkScheme.terminal.ansi.green,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-yellow-dark",
+            darkScheme.terminal.ansi.yellow,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-blue-dark",
+            darkScheme.terminal.ansi.blue,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-magenta-dark",
+            darkScheme.terminal.ansi.magenta,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-cyan-dark",
+            darkScheme.terminal.ansi.cyan,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-white-dark",
+            darkScheme.terminal.ansi.white,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-black-dark",
+            darkScheme.terminal.ansi.brightBlack,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-red-dark",
+            darkScheme.terminal.ansi.brightRed,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-green-dark",
+            darkScheme.terminal.ansi.brightGreen,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-yellow-dark",
+            darkScheme.terminal.ansi.brightYellow,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-blue-dark",
+            darkScheme.terminal.ansi.brightBlue,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-magenta-dark",
+            darkScheme.terminal.ansi.brightMagenta,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-cyan-dark",
+            darkScheme.terminal.ansi.brightCyan,
+          );
+          document.documentElement.style.setProperty(
+            "--terminal-ansi-bright-white-dark",
+            darkScheme.terminal.ansi.brightWhite,
           );
         }
 
         document.documentElement.style.setProperty(
-          "--border-radius",
+          "--corner-radius",
           `${radius}px`,
         );
       }

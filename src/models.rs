@@ -41,7 +41,7 @@ pub struct SchemeData {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SchemeColors {
     pub dark: ThemeVariant,
-    pub ligth: ThemeVariant,
+    pub light: ThemeVariant,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -62,7 +62,7 @@ pub struct UiColors {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ColorPalette {
     pub primary: String,
-    pub seccondary: String,
+    pub secondary: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
