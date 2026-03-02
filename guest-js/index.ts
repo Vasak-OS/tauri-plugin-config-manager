@@ -134,7 +134,7 @@ export const useConfigStore = () => {
     const loadConfig = async () => {
       config.value = await readConfig();
       setMode();
-      setProperties();
+      await setProperties();
     };
 
     const setMode = () => {
@@ -145,14 +145,14 @@ export const useConfigStore = () => {
       }
     };
 
-    const setProperties = () => {
+    const setProperties = async () => {
       if (config.value?.style) {
         const { "color-scheme": colorScheme, radius } = config.value.style;
-        const scheme: Scheme | unknown = getSchemeById(colorScheme) as Scheme | unknown;
+        const scheme = await getSchemeById(colorScheme);
 
-        if (scheme !== null) {
-          const darkScheme = (scheme as Scheme).scheme.colors.dark;
-          const lightScheme = (scheme as Scheme).scheme.colors.light;
+        if (scheme !== null && scheme !== undefined) {
+          const darkScheme = scheme.scheme.colors.dark;
+          const lightScheme = scheme.scheme.colors.light;
 
           // Colores de Marca
           document.documentElement.style.setProperty(
