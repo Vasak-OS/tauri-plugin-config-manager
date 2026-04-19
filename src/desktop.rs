@@ -44,8 +44,8 @@ impl<R: Runtime> ConfigManager<R> {
 
     fn default_scheme_paths() -> crate::Result<Vec<std::path::PathBuf>> {
         Ok(vec![
-            std::path::PathBuf::from("/usr/share/vasak-schemes"),
             Self::home_dir()?.join(".config/vasak/schemes"),
+            std::path::PathBuf::from("/usr/share/vasak-schemes"),
         ])
     }
 
@@ -521,8 +521,12 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     /// Obtiene un esquema específico por su ID.
+    /// Prioridad:
+    /// 1) orden de VASAK_SCHEMES_PATHS (si existe)
+    /// 2) orden por defecto: ~/.config/vasak/schemes y luego /usr/share/vasak-schemes
     pub async fn get_scheme_by_id(&self, scheme_id: &str) -> crate::Result<Option<Scheme>> {
         let schemes = self.load_schemes().await?;
+        let preferred_paths = Self::effective_scheme_paths()?;
 
         // Buscar esquemas que coincidan con el ID
         let matching_schemes: Vec<Scheme> = schemes
@@ -534,7 +538,16 @@ impl<R: Runtime> ConfigManager<R> {
             return Ok(None);
         }
 
-        // Devolver el primero encontrado según el orden de búsqueda.
+        for preferred in preferred_paths {
+            let preferred_prefix = preferred.to_string_lossy().to_string();
+            for scheme in &matching_schemes {
+                if scheme.path.starts_with(&preferred_prefix) {
+                    return Ok(Some(scheme.clone()));
+                }
+            }
+        }
+
+        // Fallback por seguridad.
         Ok(matching_schemes.into_iter().next())
     }
 }
