@@ -12,6 +12,10 @@ repository = "https://github.com/Vasak-OS/tauri-plugin-config-manager"
 readme = "README.md"
 keywords = ["tauri", "plugin", "config", "configuration", "manager"]
 
+[features]
+default = ["system-theme-sync"]
+system-theme-sync = []
+
 [dependencies]
 tauri = { version = "2" }
 serde = "1"

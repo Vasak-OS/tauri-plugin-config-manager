@@ -1,10 +1,12 @@
 use serde::de::DeserializeOwned;
-use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{plugin::PluginApi, AppHandle, Emitter, Runtime};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{Mutex as AsyncMutex, RwLock};
+
+#[cfg(feature = "system-theme-sync")]
+use std::process::Command;
 
 use crate::models::*;
 
@@ -30,6 +32,7 @@ struct CacheEntry {
     timestamp: Instant,
 }
 
+#[cfg(feature = "system-theme-sync")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesktopBackend {
     Gnome,
@@ -254,6 +257,7 @@ impl<R: Runtime> ConfigManager<R> {
         Ok(Self::home_dir()?.join(".config/vasak/vasak.conf"))
     }
 
+    #[cfg(feature = "system-theme-sync")]
     fn run_gsettings(args: &[&str]) -> crate::Result<String> {
         let output = Command::new("gsettings").args(args).output().map_err(|e| {
             crate::Error::Io(std::io::Error::new(
@@ -275,6 +279,7 @@ impl<R: Runtime> ConfigManager<R> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    #[cfg(feature = "system-theme-sync")]
     fn detect_desktop_backend() -> DesktopBackend {
         let xdg = std::env::var("XDG_CURRENT_DESKTOP")
             .unwrap_or_default()
@@ -290,10 +295,12 @@ impl<R: Runtime> ConfigManager<R> {
         }
     }
 
+    #[cfg(feature = "system-theme-sync")]
     fn has_gsettings_binary() -> bool {
         Command::new("gsettings").arg("help").output().is_ok()
     }
 
+    #[cfg(feature = "system-theme-sync")]
     fn try_sync_system_darkmode(darkmode: bool) {
         if !Self::has_gsettings_binary() {
             eprintln!(
@@ -378,6 +385,9 @@ impl<R: Runtime> ConfigManager<R> {
             }
         }
     }
+
+    #[cfg(not(feature = "system-theme-sync"))]
+    fn try_sync_system_darkmode(_darkmode: bool) {}
 
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
         let _write_guard = self.write_lock.lock().await;
