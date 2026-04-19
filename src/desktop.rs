@@ -226,46 +226,83 @@ impl<R: Runtime> ConfigManager<R> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
-    pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
-        let _write_guard = self.write_lock.lock().await;
+    fn try_sync_system_darkmode(darkmode: bool) {
+        let current_scheme_raw = match Self::run_gsettings(&[
+            "get",
+            "org.gnome.desktop.interface",
+            "color-scheme",
+        ]) {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!(
+                    "[ConfigManager::set_darkmode] Could not read system color-scheme via gsettings: {}",
+                    e
+                );
+                return;
+            }
+        };
 
-        let current_scheme_raw =
-            Self::run_gsettings(&["get", "org.gnome.desktop.interface", "color-scheme"][..])?;
         let current_scheme = current_scheme_raw
             .trim_matches('"')
             .trim_matches('\'')
             .to_string();
 
         if darkmode && current_scheme != "prefer-dark" {
-            Self::run_gsettings(
-                &[
-                    "set",
-                    "org.gnome.desktop.interface",
-                    "color-scheme",
-                    "prefer-dark",
-                ][..],
-            )?;
-            Self::run_gsettings(
-                &[
-                    "set",
-                    "org.gnome.desktop.interface",
-                    "gtk-theme",
-                    "Adwaita-dark",
-                ][..],
-            )?;
+            if let Err(e) = Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "color-scheme",
+                "prefer-dark",
+            ]) {
+                eprintln!(
+                    "[ConfigManager::set_darkmode] Could not set GNOME color-scheme to prefer-dark: {}",
+                    e
+                );
+                return;
+            }
+
+            if let Err(e) = Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "gtk-theme",
+                "Adwaita-dark",
+            ]) {
+                eprintln!(
+                    "[ConfigManager::set_darkmode] Could not set GNOME gtk-theme to Adwaita-dark: {}",
+                    e
+                );
+            }
         } else if !darkmode && current_scheme != "prefer-light" {
-            Self::run_gsettings(
-                &[
-                    "set",
-                    "org.gnome.desktop.interface",
-                    "color-scheme",
-                    "prefer-light",
-                ][..],
-            )?;
-            Self::run_gsettings(
-                &["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"][..],
-            )?;
+            if let Err(e) = Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "color-scheme",
+                "prefer-light",
+            ]) {
+                eprintln!(
+                    "[ConfigManager::set_darkmode] Could not set GNOME color-scheme to prefer-light: {}",
+                    e
+                );
+                return;
+            }
+
+            if let Err(e) =
+                Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
+            {
+                eprintln!(
+                    "[ConfigManager::set_darkmode] Could not set GNOME gtk-theme to Adwaita: {}",
+                    e
+                );
+            }
         }
+    }
+
+    pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
+        let _write_guard = self.write_lock.lock().await;
+
+        // Intentamos sincronizar con GNOME si está disponible, pero sin bloquear
+        // la persistencia de configuración cuando no existe gsettings o falla.
+        Self::try_sync_system_darkmode(darkmode);
 
         let config_path = self.config_path()?;
 
