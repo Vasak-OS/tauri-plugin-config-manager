@@ -30,6 +30,12 @@ struct CacheEntry {
     timestamp: Instant,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesktopBackend {
+    Gnome,
+    Other,
+}
+
 impl<R: Runtime> ConfigManager<R> {
     fn config_path_from_env() -> Option<std::path::PathBuf> {
         std::env::var_os("VASAK_CONFIG_PATH").and_then(|value| {
@@ -269,7 +275,40 @@ impl<R: Runtime> ConfigManager<R> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    fn detect_desktop_backend() -> DesktopBackend {
+        let xdg = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+        let session = std::env::var("DESKTOP_SESSION")
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+
+        if xdg.contains("GNOME") || session.contains("GNOME") {
+            DesktopBackend::Gnome
+        } else {
+            DesktopBackend::Other
+        }
+    }
+
+    fn has_gsettings_binary() -> bool {
+        Command::new("gsettings").arg("help").output().is_ok()
+    }
+
     fn try_sync_system_darkmode(darkmode: bool) {
+        if !Self::has_gsettings_binary() {
+            eprintln!(
+                "[ConfigManager::set_darkmode] gsettings not found; skipping system theme sync"
+            );
+            return;
+        }
+
+        if Self::detect_desktop_backend() != DesktopBackend::Gnome {
+            eprintln!(
+                "[ConfigManager::set_darkmode] Non-GNOME desktop detected; skipping system theme sync"
+            );
+            return;
+        }
+
         let current_scheme_raw = match Self::run_gsettings(&[
             "get",
             "org.gnome.desktop.interface",
