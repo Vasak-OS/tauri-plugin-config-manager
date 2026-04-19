@@ -31,6 +31,17 @@ struct CacheEntry {
 }
 
 impl<R: Runtime> ConfigManager<R> {
+    fn config_path_from_env() -> Option<std::path::PathBuf> {
+        std::env::var_os("VASAK_CONFIG_PATH").and_then(|value| {
+            let path = std::path::PathBuf::from(value);
+            if path.as_os_str().is_empty() {
+                None
+            } else {
+                Some(path)
+            }
+        })
+    }
+
     async fn write_file_atomically(path: &std::path::Path, content: &str) -> crate::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -202,6 +213,10 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     pub fn config_path(&self) -> crate::Result<std::path::PathBuf> {
+        if let Some(path) = Self::config_path_from_env() {
+            return Ok(path);
+        }
+
         Ok(Self::home_dir()?.join(".config/vasak/vasak.conf"))
     }
 
