@@ -8,7 +8,24 @@ Un plugin de Tauri para gestionar la configuración de la aplicación de forma p
 - [ ] macOS
 - [x] Linux
 
-El archivo de configuración se almacena en: `~/.config/vasak/vasak.conf`
+Ruta de configuración por defecto: `~/.config/vasak/vasak.conf`
+
+## Compatibilidad de Entorno
+
+- `set_darkmode` intenta sincronizar tema del sistema usando `gsettings` (GNOME).
+- Si `gsettings` no está disponible o falla, el plugin **no interrumpe** la operación:
+  la configuración interna se persiste igual.
+- La sincronización de tema del sistema queda como best-effort.
+
+## Variables de Entorno
+
+- `VASAK_CONFIG_PATH`: sobrescribe la ruta del archivo de configuración.
+- `VASAK_SCHEMES_PATHS`: sobrescribe rutas de esquemas (lista separada por `:` en Linux).
+
+Prioridad de búsqueda de schemes:
+
+1. Orden definido en `VASAK_SCHEMES_PATHS` (si existe).
+2. Orden por defecto: `~/.config/vasak/schemes` y luego `/usr/share/vasak-schemes`.
 
 ## Instalación
 
