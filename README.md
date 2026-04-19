@@ -12,10 +12,23 @@ Ruta de configuración por defecto: `~/.config/vasak/vasak.conf`
 
 ## Compatibilidad de Entorno
 
-- `set_darkmode` intenta sincronizar tema del sistema usando `gsettings` (GNOME).
+- `set_darkmode` detecta backend desktop usando `XDG_CURRENT_DESKTOP` y `DESKTOP_SESSION`.
+- La sincronización del tema del sistema solo se intenta en backend GNOME.
+- `set_darkmode` intenta sincronizar tema del sistema usando `gsettings` cuando corresponde.
 - Si `gsettings` no está disponible o falla, el plugin **no interrumpe** la operación:
   la configuración interna se persiste igual.
 - La sincronización de tema del sistema queda como best-effort.
+
+## Feature Flags (Rust)
+
+- `system-theme-sync` (default): habilita integración de tema del sistema con GNOME/gsettings.
+
+Ejemplo para deshabilitar sincronización de tema del sistema:
+
+```toml
+[dependencies]
+tauri-plugin-config-manager = { git = "https://github.com/Vasak-OS/tauri-plugin-config-manager", default-features = false }
+```
 
 ## Variables de Entorno
 
