@@ -42,6 +42,34 @@ impl<R: Runtime> ConfigManager<R> {
         })
     }
 
+    fn default_scheme_paths() -> crate::Result<Vec<std::path::PathBuf>> {
+        Ok(vec![
+            std::path::PathBuf::from("/usr/share/vasak-schemes"),
+            Self::home_dir()?.join(".config/vasak/schemes"),
+        ])
+    }
+
+    fn scheme_paths_from_env() -> Option<Vec<std::path::PathBuf>> {
+        let raw = std::env::var_os("VASAK_SCHEMES_PATHS")?;
+        let paths: Vec<std::path::PathBuf> = std::env::split_paths(&raw)
+            .filter(|path| !path.as_os_str().is_empty())
+            .collect();
+
+        if paths.is_empty() {
+            None
+        } else {
+            Some(paths)
+        }
+    }
+
+    fn effective_scheme_paths() -> crate::Result<Vec<std::path::PathBuf>> {
+        if let Some(paths) = Self::scheme_paths_from_env() {
+            return Ok(paths);
+        }
+
+        Self::default_scheme_paths()
+    }
+
     async fn write_file_atomically(path: &std::path::Path, content: &str) -> crate::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -436,13 +464,10 @@ impl<R: Runtime> ConfigManager<R> {
     /// Busca y carga todos los esquemas JSON desde /usr/share/vasak-schemes y ~/.config/vasak/schemes
     pub async fn load_schemes(&self) -> crate::Result<Vec<Scheme>> {
         let mut schemes = Vec::new();
-
-        // Rutas donde buscar esquemas
-        let system_schemes_path = std::path::PathBuf::from("/usr/share/vasak-schemes");
-        let user_schemes_path = Self::home_dir()?.join(".config/vasak/schemes");
+        let paths = Self::effective_scheme_paths()?;
 
         // Crear directorios si no existen
-        for path in &[&system_schemes_path, &user_schemes_path] {
+        for path in &paths {
             if let Err(e) = tokio::fs::create_dir_all(path).await {
                 eprintln!(
                     "[ConfigManager::load_schemes] Could not ensure schemes directory {}: {}",
@@ -452,8 +477,8 @@ impl<R: Runtime> ConfigManager<R> {
             }
         }
 
-        // Buscar esquemas en ambas ubicaciones
-        for path in &[system_schemes_path, user_schemes_path] {
+        // Buscar esquemas en las rutas efectivas.
+        for path in &paths {
             if let Ok(mut entries) = tokio::fs::read_dir(path).await {
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     if let Ok(metadata) = entry.metadata().await {
@@ -496,10 +521,8 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     /// Obtiene un esquema específico por su ID.
-    /// Si existen dos esquemas con el mismo ID, prioriza el de ~/.config/vasak/schemes
     pub async fn get_scheme_by_id(&self, scheme_id: &str) -> crate::Result<Option<Scheme>> {
         let schemes = self.load_schemes().await?;
-        let user_schemes_path = Self::home_dir()?.join(".config/vasak/schemes");
 
         // Buscar esquemas que coincidan con el ID
         let matching_schemes: Vec<Scheme> = schemes
@@ -511,17 +534,7 @@ impl<R: Runtime> ConfigManager<R> {
             return Ok(None);
         }
 
-        // Priorizar el esquema del usuario si existe
-        for scheme in &matching_schemes {
-            if scheme
-                .path
-                .starts_with(&user_schemes_path.to_string_lossy().to_string())
-            {
-                return Ok(Some(scheme.clone()));
-            }
-        }
-
-        // Si no hay esquema del usuario, devolver el primero encontrado
+        // Devolver el primero encontrado según el orden de búsqueda.
         Ok(matching_schemes.into_iter().next())
     }
 }
