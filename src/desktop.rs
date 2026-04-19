@@ -38,8 +38,10 @@ impl<R: Runtime> ConfigManager<R> {
         }
     }
 
-    fn home_dir() -> std::path::PathBuf {
-        dirs_next::home_dir().expect("No se pudo obtener el directorio home del usuario")
+    fn home_dir() -> crate::Result<std::path::PathBuf> {
+        dirs_next::home_dir().ok_or_else(|| {
+            crate::Error::Other("No se pudo obtener el directorio home del usuario".to_string())
+        })
     }
 
     /// Returns true if the cache is present and not expired.
@@ -62,7 +64,7 @@ impl<R: Runtime> ConfigManager<R> {
         }
 
         // Cache inválido o inexistente: leer de disco y actualizar cache.
-        let config_path = self.config_path();
+        let config_path = self.config_path()?;
 
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
@@ -92,7 +94,7 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
-        let config_path = self.config_path();
+        let config_path = self.config_path()?;
 
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
@@ -127,12 +129,12 @@ impl<R: Runtime> ConfigManager<R> {
             });
         }
         // Emitir evento para que frontends reaccionen
-        let _ = self.app.emit("config-changed", ());
+        let _ = self.app.emit(crate::CONFIG_CHANGED_EVENT, ());
         Ok(())
     }
 
-    pub fn config_path(&self) -> std::path::PathBuf {
-        Self::home_dir().join(".config/vasak/vasak.conf")
+    pub fn config_path(&self) -> crate::Result<std::path::PathBuf> {
+        Ok(Self::home_dir()?.join(".config/vasak/vasak.conf"))
     }
 
     fn run_gsettings(args: &[&str]) -> crate::Result<String> {
@@ -165,29 +167,37 @@ impl<R: Runtime> ConfigManager<R> {
             .to_string();
 
         if darkmode && current_scheme != "prefer-dark" {
-            Self::run_gsettings(&[
-                "set",
-                "org.gnome.desktop.interface",
-                "color-scheme",
-                "prefer-dark",
-            ][..])?;
-            Self::run_gsettings(&[
-                "set",
-                "org.gnome.desktop.interface",
-                "gtk-theme",
-                "Adwaita-dark",
-            ][..])?;
+            Self::run_gsettings(
+                &[
+                    "set",
+                    "org.gnome.desktop.interface",
+                    "color-scheme",
+                    "prefer-dark",
+                ][..],
+            )?;
+            Self::run_gsettings(
+                &[
+                    "set",
+                    "org.gnome.desktop.interface",
+                    "gtk-theme",
+                    "Adwaita-dark",
+                ][..],
+            )?;
         } else if !darkmode && current_scheme != "prefer-light" {
-            Self::run_gsettings(&[
-                "set",
-                "org.gnome.desktop.interface",
-                "color-scheme",
-                "prefer-light",
-            ][..])?;
-            Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"][..])?;
+            Self::run_gsettings(
+                &[
+                    "set",
+                    "org.gnome.desktop.interface",
+                    "color-scheme",
+                    "prefer-light",
+                ][..],
+            )?;
+            Self::run_gsettings(
+                &["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"][..],
+            )?;
         }
 
-        let config_path = self.config_path();
+        let config_path = self.config_path()?;
 
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
@@ -245,7 +255,7 @@ impl<R: Runtime> ConfigManager<R> {
 
     /// Fuerza refrescar el cache leyendo desde disco.
     pub async fn refresh_cache_from_file(&self) -> crate::Result<()> {
-        let config_path = self.config_path();
+        let config_path = self.config_path()?;
 
         // Si el archivo no existe, crearlo con una configuración por defecto
         if !config_path.exists() {
@@ -272,7 +282,7 @@ impl<R: Runtime> ConfigManager<R> {
 
     /// Crea el archivo de configuración con valores por defecto.
     async fn create_default_config(&self) -> crate::Result<()> {
-        let config_path = self.config_path();
+        let config_path = self.config_path()?;
 
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
@@ -328,11 +338,17 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Rutas donde buscar esquemas
         let system_schemes_path = std::path::PathBuf::from("/usr/share/vasak-schemes");
-        let user_schemes_path = Self::home_dir().join(".config/vasak/schemes");
+        let user_schemes_path = Self::home_dir()?.join(".config/vasak/schemes");
 
         // Crear directorios si no existen
         for path in &[&system_schemes_path, &user_schemes_path] {
-            tokio::fs::create_dir_all(path).await.ok(); // Ignoramos errores de creación (ej: permisos)
+            if let Err(e) = tokio::fs::create_dir_all(path).await {
+                eprintln!(
+                    "[ConfigManager::load_schemes] Could not ensure schemes directory {}: {}",
+                    path.display(),
+                    e
+                );
+            }
         }
 
         // Buscar esquemas en ambas ubicaciones
@@ -344,16 +360,22 @@ impl<R: Runtime> ConfigManager<R> {
                             if let Some(filename) = entry.file_name().to_str() {
                                 if filename.ends_with(".json") {
                                     let file_path = entry.path();
-                                    if let Ok(content) = tokio::fs::read_to_string(&file_path).await {
-                                        if let Ok(scheme_data) =
-                                            serde_json::from_str::<SchemeData>(&content)
-                                        {
-                                            schemes.push(Scheme {
-                                                path: file_path
-                                                    .to_string_lossy()
-                                                    .to_string(),
-                                                scheme: scheme_data,
-                                            });
+                                    if let Ok(content) = tokio::fs::read_to_string(&file_path).await
+                                    {
+                                        match serde_json::from_str::<SchemeData>(&content) {
+                                            Ok(scheme_data) => {
+                                                schemes.push(Scheme {
+                                                    path: file_path.to_string_lossy().to_string(),
+                                                    scheme: scheme_data,
+                                                });
+                                            }
+                                            Err(e) => {
+                                                eprintln!(
+                                                    "[ConfigManager::load_schemes] Invalid scheme JSON in {}: {}",
+                                                    file_path.display(),
+                                                    e
+                                                );
+                                            }
                                         }
                                     }
                                 }
@@ -361,17 +383,22 @@ impl<R: Runtime> ConfigManager<R> {
                         }
                     }
                 }
+            } else {
+                eprintln!(
+                    "[ConfigManager::load_schemes] Could not read schemes directory {}",
+                    path.display()
+                );
             }
         }
 
         Ok(schemes)
     }
 
-    /// Obtiene un esquema específico por su ID. 
+    /// Obtiene un esquema específico por su ID.
     /// Si existen dos esquemas con el mismo ID, prioriza el de ~/.config/vasak/schemes
     pub async fn get_scheme_by_id(&self, scheme_id: &str) -> crate::Result<Option<Scheme>> {
         let schemes = self.load_schemes().await?;
-        let user_schemes_path = Self::home_dir().join(".config/vasak/schemes");
+        let user_schemes_path = Self::home_dir()?.join(".config/vasak/schemes");
 
         // Buscar esquemas que coincidan con el ID
         let matching_schemes: Vec<Scheme> = schemes
@@ -385,7 +412,10 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Priorizar el esquema del usuario si existe
         for scheme in &matching_schemes {
-            if scheme.path.starts_with(&user_schemes_path.to_string_lossy().to_string()) {
+            if scheme
+                .path
+                .starts_with(&user_schemes_path.to_string_lossy().to_string())
+            {
                 return Ok(Some(scheme.clone()));
             }
         }
