@@ -3,6 +3,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{plugin::PluginApi, AppHandle, Emitter, Runtime};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
 use crate::models::*;
@@ -29,6 +30,75 @@ struct CacheEntry {
 }
 
 impl<R: Runtime> ConfigManager<R> {
+        async fn write_file_atomically(
+            path: &std::path::Path,
+            content: &str,
+        ) -> crate::Result<()> {
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            let parent = path.parent().ok_or_else(|| {
+                crate::Error::Other(format!(
+                    "Config path has no parent directory: {}",
+                    path.display()
+                ))
+            })?;
+
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| crate::Error::Other(format!("System time error: {}", e)))?
+                .as_nanos();
+            let tmp_path = parent.join(format!(".vasak.conf.tmp-{}-{}", std::process::id(), nonce));
+
+            let mut tmp_file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to create temporary config file {}: {}",
+                        tmp_path.display(),
+                        e
+                    ),
+                ))
+            })?;
+
+            if let Err(e) = tmp_file.write_all(content.as_bytes()).await {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                return Err(crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to write temporary config file {}: {}",
+                        tmp_path.display(),
+                        e
+                    ),
+                )));
+            }
+
+            if let Err(e) = tmp_file.sync_all().await {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                return Err(crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to sync temporary config file {}: {}",
+                        tmp_path.display(),
+                        e
+                    ),
+                )));
+            }
+
+            drop(tmp_file);
+
+            tokio::fs::rename(&tmp_path, path).await.map_err(|e| {
+                let _ = std::fs::remove_file(&tmp_path);
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!(
+                        "Failed to atomically replace config file {}: {}",
+                        path.display(),
+                        e
+                    ),
+                ))
+            })
+        }
+
     pub fn new(app: AppHandle<R>) -> Self {
         // Default TTL de 30 minutos para evitar lecturas de disco frecuentes.
         Self {
@@ -96,6 +166,9 @@ impl<R: Runtime> ConfigManager<R> {
     pub async fn write_config(&self, config: &str) -> crate::Result<()> {
         let config_path = self.config_path()?;
 
+        // Validar semánticamente el payload antes de persistir.
+        serde_json::from_str::<VSKConfig>(config).map_err(crate::Error::Json)?;
+
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
@@ -110,16 +183,7 @@ impl<R: Runtime> ConfigManager<R> {
             })?;
         }
 
-        tokio::fs::write(&config_path, config).await.map_err(|e| {
-            crate::Error::Io(std::io::Error::new(
-                e.kind(),
-                format!(
-                    "Failed to write to config file {}: {}",
-                    config_path.display(),
-                    e
-                ),
-            ))
-        })?;
+        Self::write_file_atomically(config_path.as_path(), config).await?;
         // Actualizar cache inmediatamente con el contenido provisto
         {
             let mut guard = self.cache.write().await;
@@ -223,18 +287,7 @@ impl<R: Runtime> ConfigManager<R> {
         let new_content =
             serde_json::to_string_pretty(&config).map_err(|e| crate::Error::Json(e))?;
 
-        tokio::fs::write(&config_path, new_content)
-            .await
-            .map_err(|e| {
-                crate::Error::Io(std::io::Error::new(
-                    e.kind(),
-                    format!(
-                        "Failed to write to config file {}: {}",
-                        config_path.display(),
-                        e
-                    ),
-                ))
-            })?;
+        Self::write_file_atomically(config_path.as_path(), &new_content).await?;
         // Actualizar cache con el nuevo contenido
         {
             let mut guard = self.cache.write().await;
@@ -316,18 +369,7 @@ impl<R: Runtime> ConfigManager<R> {
         let config_content =
             serde_json::to_string_pretty(&default_config).map_err(|e| crate::Error::Json(e))?;
 
-        tokio::fs::write(&config_path, &config_content)
-            .await
-            .map_err(|e| {
-                crate::Error::Io(std::io::Error::new(
-                    e.kind(),
-                    format!(
-                        "Failed to write default config file {}: {}",
-                        config_path.display(),
-                        e
-                    ),
-                ))
-            })?;
+        Self::write_file_atomically(config_path.as_path(), &config_content).await?;
 
         Ok(())
     }
