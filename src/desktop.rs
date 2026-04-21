@@ -500,6 +500,11 @@ impl<R: Runtime> ConfigManager<R> {
                 showfiles: true,
                 showhiddenfiles: false,
             }),
+            fonts: Fonts {
+                termina: String::new(),
+                title: String::new(),
+                apps: String::new(),
+            },
         };
 
         let config_content =
