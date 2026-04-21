@@ -46,6 +46,11 @@ export type VSKConfig = {
     showfiles: boolean;
     showhiddenfiles: boolean;
   };
+  fonts: {
+    termina: string;
+    title: string;
+    apps: string;
+  };
 };
 
 export type Scheme = {

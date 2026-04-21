@@ -4,6 +4,15 @@ use serde::{Deserialize, Serialize};
 pub struct VSKConfig {
     pub style: Style,
     pub desktop: Option<Desktop>,
+    #[serde(default)]
+    pub fonts: Fonts,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct Fonts {
+    pub termina: String,
+    pub title: String,
+    pub apps: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
