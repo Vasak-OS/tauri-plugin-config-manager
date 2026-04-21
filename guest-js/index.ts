@@ -51,6 +51,10 @@ export type VSKConfig = {
     title: string;
     apps: string;
   };
+  icons: {
+    dark: string;
+    light: string;
+  };
 };
 
 export type Scheme = {
