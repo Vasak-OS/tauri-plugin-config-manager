@@ -54,7 +54,7 @@ impl<R: Runtime> ConfigManager<R> {
     fn default_scheme_paths() -> crate::Result<Vec<std::path::PathBuf>> {
         Ok(vec![
             Self::home_dir()?.join(".config/vasak/schemes"),
-            std::path::PathBuf::from("/usr/share/vasak-schemes"),
+            std::path::PathBuf::from("/usr/share/schemes"),
         ])
     }
 
