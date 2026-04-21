@@ -6,6 +6,8 @@ pub struct VSKConfig {
     pub desktop: Option<Desktop>,
     #[serde(default)]
     pub fonts: Fonts,
+    #[serde(default)]
+    pub icons: Icons,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -13,6 +15,13 @@ pub struct Fonts {
     pub termina: String,
     pub title: String,
     pub apps: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct Icons {
+    pub dark: String,
+    #[serde(default, alias = "light")]
+    pub light: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

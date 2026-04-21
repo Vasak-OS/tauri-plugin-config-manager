@@ -217,9 +217,13 @@ impl<R: Runtime> ConfigManager<R> {
         let config_path = self.config_path()?;
 
         // Validar semánticamente el payload antes de persistir.
-        serde_json::from_str::<VSKConfig>(config).map_err(crate::Error::Json)?;
+        let parsed_config: VSKConfig =
+            serde_json::from_str(config).map_err(crate::Error::Json)?;
 
         let _write_guard = self.write_lock.lock().await;
+
+        // Aplicar icon pack en runtime según el modo actual guardado.
+        Self::try_apply_icon_pack(&parsed_config.icons, parsed_config.style.darkmode);
 
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
@@ -280,22 +284,6 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     #[cfg(feature = "system-theme-sync")]
-    fn detect_desktop_backend() -> DesktopBackend {
-        let xdg = std::env::var("XDG_CURRENT_DESKTOP")
-            .unwrap_or_default()
-            .to_ascii_uppercase();
-        let session = std::env::var("DESKTOP_SESSION")
-            .unwrap_or_default()
-            .to_ascii_uppercase();
-
-        if xdg.contains("GNOME") || session.contains("GNOME") {
-            DesktopBackend::Gnome
-        } else {
-            DesktopBackend::Other
-        }
-    }
-
-    #[cfg(feature = "system-theme-sync")]
     fn has_gsettings_binary() -> bool {
         Command::new("gsettings").arg("help").output().is_ok()
     }
@@ -305,13 +293,6 @@ impl<R: Runtime> ConfigManager<R> {
         if !Self::has_gsettings_binary() {
             eprintln!(
                 "[ConfigManager::set_darkmode] gsettings not found; skipping system theme sync"
-            );
-            return;
-        }
-
-        if Self::detect_desktop_backend() != DesktopBackend::Gnome {
-            eprintln!(
-                "[ConfigManager::set_darkmode] Non-GNOME desktop detected; skipping system theme sync"
             );
             return;
         }
@@ -389,6 +370,39 @@ impl<R: Runtime> ConfigManager<R> {
     #[cfg(not(feature = "system-theme-sync"))]
     fn try_sync_system_darkmode(_darkmode: bool) {}
 
+    #[cfg(feature = "system-theme-sync")]
+    fn try_apply_icon_pack(icons: &Icons, darkmode: bool) {
+        if !Self::has_gsettings_binary() {
+            return;
+        }
+
+        let selected_pack = if darkmode {
+            icons.dark.trim()
+        } else {
+            icons.light.trim()
+        };
+
+        if selected_pack.is_empty() {
+            return;
+        }
+
+        if let Err(e) = Self::run_gsettings(&[
+            "set",
+            "org.gnome.desktop.interface",
+            "icon-theme",
+            selected_pack,
+        ]) {
+            eprintln!(
+                "[ConfigManager] Could not set icon theme to '{}': {}",
+                selected_pack,
+                e
+            );
+        }
+    }
+
+    #[cfg(not(feature = "system-theme-sync"))]
+    fn try_apply_icon_pack(_icons: &Icons, _darkmode: bool) {}
+
     pub async fn set_darkmode(&self, darkmode: bool) -> crate::Result<()> {
         let _write_guard = self.write_lock.lock().await;
 
@@ -418,6 +432,9 @@ impl<R: Runtime> ConfigManager<R> {
             serde_json::from_str(&config_content).map_err(crate::Error::Json)?;
 
         config.style.darkmode = darkmode;
+
+        // Aplicar icon pack asociado al modo actual (dark/light).
+        Self::try_apply_icon_pack(&config.icons, darkmode);
 
         let new_content = serde_json::to_string_pretty(&config).map_err(crate::Error::Json)?;
 
@@ -504,6 +521,10 @@ impl<R: Runtime> ConfigManager<R> {
                 termina: String::new(),
                 title: String::new(),
                 apps: String::new(),
+            },
+            icons: Icons {
+                dark: String::new(),
+                light: String::new(),
             },
         };
 
