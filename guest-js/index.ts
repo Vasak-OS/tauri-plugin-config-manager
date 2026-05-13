@@ -47,7 +47,7 @@ export type VSKConfig = {
     showhiddenfiles: boolean;
   };
   fonts: {
-    termina: string;
+    terminal: string;
     title: string;
     apps: string;
   };

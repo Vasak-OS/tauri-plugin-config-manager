@@ -32,13 +32,6 @@ struct CacheEntry {
     timestamp: Instant,
 }
 
-#[cfg(feature = "system-theme-sync")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DesktopBackend {
-    Gnome,
-    Other,
-}
-
 impl<R: Runtime> ConfigManager<R> {
     fn config_path_from_env() -> Option<std::path::PathBuf> {
         std::env::var_os("VASAK_CONFIG_PATH").and_then(|value| {
@@ -518,7 +511,7 @@ impl<R: Runtime> ConfigManager<R> {
                 showhiddenfiles: false,
             }),
             fonts: Fonts {
-                termina: String::new(),
+                terminal: String::new(),
                 title: String::new(),
                 apps: String::new(),
             },

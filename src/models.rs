@@ -12,7 +12,7 @@ pub struct VSKConfig {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Fonts {
-    pub termina: String,
+    pub terminal: String,
     pub title: String,
     pub apps: String,
 }
