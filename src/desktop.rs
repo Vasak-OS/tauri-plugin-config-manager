@@ -22,6 +22,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 pub struct ConfigManager<R: Runtime> {
     app: AppHandle<R>,
     cache: Arc<RwLock<Option<CacheEntry>>>,
+    schemes_cache: Arc<RwLock<Option<SchemesCacheEntry>>>,
     write_lock: Arc<AsyncMutex<()>>,
     ttl: Duration,
 }
@@ -29,6 +30,12 @@ pub struct ConfigManager<R: Runtime> {
 #[derive(Debug, Clone)]
 struct CacheEntry {
     content: String,
+    timestamp: Instant,
+}
+
+#[derive(Debug, Clone)]
+struct SchemesCacheEntry {
+    schemes: Vec<Scheme>,
     timestamp: Instant,
 }
 
@@ -143,6 +150,7 @@ impl<R: Runtime> ConfigManager<R> {
         Self {
             app,
             cache: Arc::new(RwLock::new(None)),
+            schemes_cache: Arc::new(RwLock::new(None)),
             write_lock: Arc::new(AsyncMutex::new(())),
             ttl: Duration::from_secs(30 * 60),
         }
@@ -440,8 +448,14 @@ impl<R: Runtime> ConfigManager<R> {
 
     /// Limpia el cache manualmente.
     pub async fn clear_cache(&self) {
-        let mut guard = self.cache.write().await;
-        *guard = None;
+        {
+            let mut guard = self.cache.write().await;
+            *guard = None;
+        }
+        {
+            let mut guard = self.schemes_cache.write().await;
+            *guard = None;
+        }
     }
 
     /// Fuerza refrescar el cache leyendo desde disco.
@@ -526,6 +540,16 @@ impl<R: Runtime> ConfigManager<R> {
 
     /// Busca y carga todos los esquemas JSON desde /usr/share/vasak-schemes y ~/.config/vasak/schemes
     pub async fn load_schemes(&self) -> crate::Result<Vec<Scheme>> {
+        // Cache lookup atómico
+        {
+            let guard = self.schemes_cache.read().await;
+            if let Some(entry) = guard.as_ref() {
+                if entry.timestamp.elapsed() < self.ttl {
+                    return Ok(entry.schemes.clone());
+                }
+            }
+        }
+
         let mut schemes = Vec::new();
         let paths = Self::effective_scheme_paths()?;
 
@@ -578,6 +602,14 @@ impl<R: Runtime> ConfigManager<R> {
                     path.display()
                 );
             }
+        }
+
+        {
+            let mut guard = self.schemes_cache.write().await;
+            *guard = Some(SchemesCacheEntry {
+                schemes: schemes.clone(),
+                timestamp: Instant::now(),
+            });
         }
 
         Ok(schemes)
