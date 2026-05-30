@@ -53,8 +53,8 @@ fn watch_config_file<R: Runtime + 'static>(
     Box::new(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else {
             if let Err(e) = res {
-                eprintln!(
-                    "[Config Watcher Callback] Error watching config file: {:?}",
+                tracing::error!(
+                    "Error watching config file: {:?}",
                     e
                 );
             }
@@ -64,7 +64,7 @@ fn watch_config_file<R: Runtime + 'static>(
         if should_handle_event(&event, watched_file_path.as_path()) {
             let lock_state = last_refresh.lock();
             let Ok(mut last_refresh_at) = lock_state else {
-                eprintln!("[Config Watcher Callback] Debounce mutex poisoned");
+                tracing::error!("Debounce mutex poisoned");
                 return;
             };
 
@@ -84,19 +84,13 @@ fn watch_config_file<R: Runtime + 'static>(
                 // Obtener el estado del ConfigManager y actualizar su cache.
                 let state = app_for_async.state::<desktop::ConfigManager<R>>();
                 if let Err(e) = state.inner().refresh_cache_from_file().await {
-                    eprintln!(
-                        "[Config Watcher Callback] Failed to refresh config cache: {}",
-                        e
-                    );
+                    tracing::error!("Failed to refresh config cache: {}", e);
                 }
                 // Emitir evento para frontends
                 app_for_async
                     .emit(CONFIG_CHANGED_EVENT, ())
                     .unwrap_or_else(|e| {
-                        eprintln!(
-                            "[Config Watcher Callback] Failed to emit config-changed event: {}",
-                            e
-                        );
+                        tracing::error!("Failed to emit config-changed event: {}", e);
                     });
             });
         }

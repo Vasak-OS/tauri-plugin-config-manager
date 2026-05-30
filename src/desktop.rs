@@ -149,27 +149,20 @@ impl<R: Runtime> ConfigManager<R> {
     }
 
     fn home_dir() -> crate::Result<std::path::PathBuf> {
-        dirs_next::home_dir().ok_or_else(|| {
+        home::home_dir().ok_or_else(|| {
             crate::Error::Other("No se pudo obtener el directorio home del usuario".to_string())
         })
     }
 
-    /// Returns true if the cache is present and not expired.
-    async fn is_cache_valid(&self) -> bool {
-        let guard = self.cache.read().await;
-        if let Some(entry) = guard.as_ref() {
-            entry.timestamp.elapsed() < self.ttl
-        } else {
-            false
-        }
-    }
-
     /// Read configuration using cache-first strategy.
     pub async fn read_config(&self) -> crate::Result<String> {
-        if self.is_cache_valid().await {
+        // Single atomic cache lookup
+        {
             let guard = self.cache.read().await;
             if let Some(entry) = guard.as_ref() {
-                return Ok(entry.content.clone());
+                if entry.timestamp.elapsed() < self.ttl {
+                    return Ok(entry.content.clone());
+                }
             }
         }
 
@@ -284,8 +277,8 @@ impl<R: Runtime> ConfigManager<R> {
     #[cfg(feature = "system-theme-sync")]
     fn try_sync_system_darkmode(darkmode: bool) {
         if !Self::has_gsettings_binary() {
-            eprintln!(
-                "[ConfigManager::set_darkmode] gsettings not found; skipping system theme sync"
+                tracing::warn!(
+                "gsettings not found; skipping system theme sync"
             );
             return;
         }
@@ -297,8 +290,8 @@ impl<R: Runtime> ConfigManager<R> {
         ]) {
             Ok(value) => value,
             Err(e) => {
-                eprintln!(
-                    "[ConfigManager::set_darkmode] Could not read system color-scheme via gsettings: {}",
+                tracing::error!(
+                    "Could not read system color-scheme via gsettings: {}",
                     e
                 );
                 return;
@@ -317,8 +310,8 @@ impl<R: Runtime> ConfigManager<R> {
                 "color-scheme",
                 "prefer-dark",
             ]) {
-                eprintln!(
-                    "[ConfigManager::set_darkmode] Could not set GNOME color-scheme to prefer-dark: {}",
+                tracing::error!(
+                    "Could not set GNOME color-scheme to prefer-dark: {}",
                     e
                 );
                 return;
@@ -330,8 +323,8 @@ impl<R: Runtime> ConfigManager<R> {
                 "gtk-theme",
                 "Adwaita-dark",
             ]) {
-                eprintln!(
-                    "[ConfigManager::set_darkmode] Could not set GNOME gtk-theme to Adwaita-dark: {}",
+                tracing::error!(
+                    "Could not set GNOME gtk-theme to Adwaita-dark: {}",
                     e
                 );
             }
@@ -342,8 +335,8 @@ impl<R: Runtime> ConfigManager<R> {
                 "color-scheme",
                 "prefer-light",
             ]) {
-                eprintln!(
-                    "[ConfigManager::set_darkmode] Could not set GNOME color-scheme to prefer-light: {}",
+                tracing::error!(
+                    "Could not set GNOME color-scheme to prefer-light: {}",
                     e
                 );
                 return;
@@ -352,8 +345,8 @@ impl<R: Runtime> ConfigManager<R> {
             if let Err(e) =
                 Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
             {
-                eprintln!(
-                    "[ConfigManager::set_darkmode] Could not set GNOME gtk-theme to Adwaita: {}",
+                tracing::error!(
+                    "Could not set GNOME gtk-theme to Adwaita: {}",
                     e
                 );
             }
@@ -385,8 +378,8 @@ impl<R: Runtime> ConfigManager<R> {
             "icon-theme",
             selected_pack,
         ]) {
-            eprintln!(
-                "[ConfigManager] Could not set icon theme to '{}': {}",
+            tracing::error!(
+                "Could not set icon theme to '{}': {}",
                 selected_pack,
                 e
             );
@@ -436,10 +429,12 @@ impl<R: Runtime> ConfigManager<R> {
         {
             let mut guard = self.cache.write().await;
             *guard = Some(CacheEntry {
-                content: serde_json::to_string_pretty(&config).map_err(crate::Error::Json)?,
+                content: new_content,
                 timestamp: Instant::now(),
             });
         }
+        // Emitir evento para que frontends reaccionen
+        let _ = self.app.emit(crate::CONFIG_CHANGED_EVENT, ());
         Ok(())
     }
 
@@ -537,8 +532,8 @@ impl<R: Runtime> ConfigManager<R> {
         // Crear directorios si no existen
         for path in &paths {
             if let Err(e) = tokio::fs::create_dir_all(path).await {
-                eprintln!(
-                    "[ConfigManager::load_schemes] Could not ensure schemes directory {}: {}",
+                tracing::warn!(
+                    "Could not ensure schemes directory {}: {}",
                     path.display(),
                     e
                 );
@@ -564,8 +559,8 @@ impl<R: Runtime> ConfigManager<R> {
                                                 });
                                             }
                                             Err(e) => {
-                                                eprintln!(
-                                                    "[ConfigManager::load_schemes] Invalid scheme JSON in {}: {}",
+                                                tracing::warn!(
+                                                    "Invalid scheme JSON in {}: {}",
                                                     file_path.display(),
                                                     e
                                                 );
@@ -578,8 +573,8 @@ impl<R: Runtime> ConfigManager<R> {
                     }
                 }
             } else {
-                eprintln!(
-                    "[ConfigManager::load_schemes] Could not read schemes directory {}",
+                tracing::warn!(
+                    "Could not read schemes directory {}",
                     path.display()
                 );
             }

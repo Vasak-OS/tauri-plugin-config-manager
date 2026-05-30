@@ -20,10 +20,11 @@ system-theme-sync = []
 tauri = { version = "2" }
 serde = "1"
 thiserror = "2"
-tokio = "1"
+tokio = { version = "1", default-features = false, features = ["fs", "sync", "io-util", "rt"] }
 serde_json = "1"
-dirs-next = "2"
+home = "0.5"
 notify = "8"
+tracing = "0.1"
 
 [build-dependencies]
 tauri-plugin = { version = "2", features = ["build"] }
