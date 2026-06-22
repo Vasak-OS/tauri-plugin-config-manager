@@ -34,18 +34,22 @@ impl<R: Runtime, T: Manager<R>> crate::ConfigManagerExt<R> for T {
     }
 }
 
-fn should_handle_event(event: &notify::Event, watched_file_path: &Path) -> bool {
+fn should_handle_event(event: &notify::Event, config_file_path: &Path) -> bool {
     let is_relevant_kind = matches!(
         event.kind,
         EventKind::Create(_) | EventKind::Modify(_)
     );
+    if !is_relevant_kind {
+        return false;
+    }
 
-    is_relevant_kind && event.paths.iter().any(|path| path == watched_file_path)
+    let file_name = config_file_path.file_name();
+    event.paths.iter().any(|path| path.file_name() == file_name)
 }
 
 fn watch_config_file<R: Runtime + 'static>(
     app: &tauri::AppHandle<R>,
-    watched_file_path: std::path::PathBuf,
+    config_file_path: std::path::PathBuf,
 ) -> Box<dyn FnMut(notify::Result<notify::Event>) + Send + 'static> {
     let app_handle = app.clone();
     let debounce_window = Duration::from_millis(250);
@@ -61,7 +65,7 @@ fn watch_config_file<R: Runtime + 'static>(
             return;
         };
 
-        if should_handle_event(&event, watched_file_path.as_path()) {
+        if should_handle_event(&event, config_file_path.as_path()) {
             let lock_state = last_refresh.lock();
             let Ok(mut last_refresh_at) = lock_state else {
                 tracing::error!("Debounce mutex poisoned");
@@ -112,19 +116,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let config_path = config_manager.config_path()?;
             app.manage(config_manager);
 
-            let watch_target = if config_path.exists() {
-                config_path.clone()
-            } else {
-                config_path
-                    .parent()
-                    .map(std::path::Path::to_path_buf)
-                    .ok_or_else(|| {
-                        Error::Other(format!(
-                            "Invalid config path without parent: {}",
-                            config_path.display()
-                        ))
-                    })?
-            };
+            let watch_target = config_path
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .ok_or_else(|| {
+                    Error::Other(format!(
+                        "Invalid config path without parent: {}",
+                        config_path.display()
+                    ))
+                })?;
 
             let app_handle_for_watcher = app.clone();
             let event_handler = watch_config_file(&app_handle_for_watcher, config_path.clone());
