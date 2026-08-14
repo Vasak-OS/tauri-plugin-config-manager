@@ -421,6 +421,23 @@ export const useConfigStore = () => {
           `${radius}px`,
         );
       }
+
+      // The fonts were read and then dropped: Configuración wrote the choice
+      // into vasak.conf and no application ever looked at it, so picking a font
+      // changed nothing anywhere. They are applied here, next to the colours,
+      // because that is what makes every application follow the configuration
+      // without each one having to remember to.
+      const fonts = config.value?.fonts;
+      const root = document.documentElement.style;
+
+      root.setProperty("--font-apps", fonts?.apps || "");
+      root.setProperty("--font-title", fonts?.title || fonts?.apps || "");
+      root.setProperty("--font-terminal", fonts?.terminal || "");
+
+      // Set on the element rather than left to each stylesheet: an inline style
+      // beats Tailwind's own `font-family` on <html>, which is what would
+      // otherwise win and keep the default font on screen.
+      root.fontFamily = fonts?.apps || "";
     };
 
     return {
