@@ -13,6 +13,8 @@ mod commands;
 #[cfg(desktop)]
 mod desktop;
 mod error;
+#[cfg(all(desktop, feature = "system-theme-sync"))]
+mod gtk_settings;
 mod models;
 
 pub use error::{Error, Result};

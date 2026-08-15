@@ -329,7 +329,7 @@ impl<R: Runtime> ConfigManager<R> {
                 "set",
                 "org.gnome.desktop.interface",
                 "gtk-theme",
-                "Adwaita-dark",
+                crate::gtk_settings::DARK_GTK_THEME,
             ]) {
                 tracing::error!(
                     "Could not set GNOME gtk-theme to Adwaita-dark: {}",
@@ -350,9 +350,12 @@ impl<R: Runtime> ConfigManager<R> {
                 return;
             }
 
-            if let Err(e) =
-                Self::run_gsettings(&["set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
-            {
+            if let Err(e) = Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "gtk-theme",
+                crate::gtk_settings::LIGHT_GTK_THEME,
+            ]) {
                 tracing::error!(
                     "Could not set GNOME gtk-theme to Adwaita: {}",
                     e
@@ -366,17 +369,19 @@ impl<R: Runtime> ConfigManager<R> {
 
     #[cfg(feature = "system-theme-sync")]
     fn try_apply_icon_pack(icons: &Icons, darkmode: bool) {
-        if !Self::has_gsettings_binary() {
-            return;
-        }
-
         let selected_pack = if darkmode {
             icons.dark.trim()
         } else {
             icons.light.trim()
         };
 
-        if selected_pack.is_empty() {
+        // Written first and unconditionally: this is the store GTK reads when an
+        // application starts, so it is what decides how the session looks after a
+        // reboot. gsettings only reaches programs that are already running, and
+        // only where a settings daemon is there to forward it.
+        crate::gtk_settings::apply(darkmode, selected_pack);
+
+        if !Self::has_gsettings_binary() || selected_pack.is_empty() {
             return;
         }
 
