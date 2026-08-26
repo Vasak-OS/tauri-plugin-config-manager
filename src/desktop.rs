@@ -268,8 +268,7 @@ impl<R: Runtime> ConfigManager<R> {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let detail = if stderr.is_empty() { stdout } else { stderr };
-            return Err(crate::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(crate::Error::Io(std::io::Error::other(
                 format!("gsettings {} failed: {}", args.join(" "), detail),
             )));
         }
@@ -536,7 +535,7 @@ impl<R: Runtime> ConfigManager<R> {
         };
 
         let config_content =
-            serde_json::to_string_pretty(&default_config).map_err(|e| crate::Error::Json(e))?;
+            serde_json::to_string_pretty(&default_config).map_err(crate::Error::Json)?;
 
         Self::write_file_atomically(config_path.as_path(), &config_content).await?;
 
