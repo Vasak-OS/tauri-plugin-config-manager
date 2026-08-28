@@ -36,7 +36,10 @@ pub struct Desktop {
     pub wallpaper: Vec<String>,
     #[serde(default = "tamano_de_icono_por_defecto")]
     pub iconsize: u32,
-    #[serde(default)]
+    /// Con su propio valor de fábrica: `#[serde(default)]` daría `false` para un
+    /// `bool`, así que a un archivo al que le faltara esta clave se le
+    /// esconderían los archivos del escritorio sin que nadie lo pidiera.
+    #[serde(default = "mostrar_archivos_por_defecto")]
     pub showfiles: bool,
     #[serde(default)]
     pub showhiddenfiles: bool,
@@ -44,6 +47,10 @@ pub struct Desktop {
 
 fn tamano_de_icono_por_defecto() -> u32 {
     48
+}
+
+fn mostrar_archivos_por_defecto() -> bool {
+    true
 }
 
 /// Los valores de fábrica, que son los mismos que escribe la configuración por

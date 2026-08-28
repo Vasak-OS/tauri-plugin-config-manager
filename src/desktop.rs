@@ -241,28 +241,52 @@ impl<R: Runtime> ConfigManager<R> {
     async fn leer_utilizable(&self) -> crate::Result<String> {
         let config_path = self.config_path()?;
 
-        if !config_path.exists() {
-            let _write_guard = self.write_lock.lock().await;
-            if !config_path.exists() {
-                self.create_default_config().await?;
+        // Camino rápido, sin cerrojo: el archivo está y sirve, que es lo que
+        // pasa siempre salvo la primera vez o después de un apagón.
+        if config_path.exists() {
+            let contenido = Self::leer_archivo(&config_path).await?;
+            if Self::es_utilizable(&contenido) {
+                return Self::normalizar(&contenido);
             }
         }
 
-        let contenido = Self::leer_archivo(&config_path).await?;
-
-        if Self::es_utilizable(&contenido) {
-            return Ok(contenido);
-        }
-
         let _write_guard = self.write_lock.lock().await;
+        self.leer_utilizable_con_el_cerrojo_tomado(&config_path).await
+    }
+
+    /// Lo mismo, para quien **ya** tiene el cerrojo de escritura.
+    ///
+    /// El cerrojo de tokio no es reentrante: `set_darkmode` lo toma antes de
+    /// leer, así que si la lectura volviera a pedirlo la recuperación se
+    /// quedaría esperándose a sí misma para siempre — justo en el caso en que
+    /// alguien intenta cambiar el tema para salir de una configuración rota.
+    async fn leer_utilizable_con_el_cerrojo_tomado(
+        &self,
+        config_path: &std::path::Path,
+    ) -> crate::Result<String> {
+        if !config_path.exists() {
+            self.create_default_config().await?;
+        }
 
         // Otro hilo pudo haberlo repuesto mientras se esperaba el cerrojo.
-        let contenido = Self::leer_archivo(&config_path).await?;
+        let contenido = Self::leer_archivo(config_path).await?;
         if Self::es_utilizable(&contenido) {
-            return Ok(contenido);
+            return Self::normalizar(&contenido);
         }
 
-        Self::reponer_por_defecto(&config_path).await
+        let repuesto = Self::reponer_por_defecto(config_path).await?;
+        Self::normalizar(&repuesto)
+    }
+
+    /// El contenido con los valores de fábrica ya puestos donde faltaban.
+    ///
+    /// Devolver el texto tal como está en el archivo dejaba a medias el arreglo
+    /// de las claves ausentes: `serde` las completa **al parsear en Rust**, pero
+    /// quien consume `read_config` recibe el JSON crudo y ahí `style.radius`
+    /// sigue sin estar. Normalizando, todos ven una configuración completa.
+    fn normalizar(contenido: &str) -> crate::Result<String> {
+        let config: VSKConfig = serde_json::from_str(contenido).map_err(crate::Error::Json)?;
+        serde_json::to_string_pretty(&config).map_err(crate::Error::Json)
     }
 
     async fn leer_archivo(config_path: &std::path::Path) -> crate::Result<String> {
@@ -509,8 +533,11 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Por el mismo camino que la lectura: con un archivo ilegible esto
         // fallaba, así que ni siquiera se podía cambiar el tema para salir del
-        // problema.
-        let config_content = self.leer_utilizable().await?;
+        // problema. Con la variante que no vuelve a pedir el cerrojo, que acá ya
+        // está tomado.
+        let config_content = self
+            .leer_utilizable_con_el_cerrojo_tomado(&config_path)
+            .await?;
 
         let mut config: VSKConfig =
             serde_json::from_str(&config_content).map_err(crate::Error::Json)?;
@@ -780,6 +807,30 @@ mod pruebas_de_reposicion {
             vec!["/un/fondo.jpg".to_string()],
             "y el fondo no se pierde"
         );
+    }
+
+    #[test]
+    fn normalizar_completa_lo_que_falta() {
+        // Lo que faltaba del arreglo anterior: `serde` completa las claves al
+        // parsear en Rust, pero quien consume `read_config` recibía el JSON
+        // crudo y ahí `radius` seguía sin estar. Ahora se devuelve normalizado.
+        let sin_radio = r#"{"style":{"darkmode":true,"color-scheme":"vasak-default"}}"#;
+        let normalizado = Manager::normalizar(sin_radio).expect("normaliza");
+        let valor: serde_json::Value = serde_json::from_str(&normalizado).expect("parsea");
+
+        assert_eq!(valor["style"]["radius"], 8, "el radio de fábrica, ya escrito");
+        assert_eq!(valor["style"]["darkmode"], true, "y lo que sí estaba se respeta");
+    }
+
+    #[test]
+    fn los_archivos_del_escritorio_se_muestran_si_no_dice_lo_contrario() {
+        // `#[serde(default)]` sobre un `bool` da `false`: a un archivo al que le
+        // faltara esta clave se le escondían los archivos del escritorio sin que
+        // nadie lo hubiera pedido.
+        let sin_showfiles = r#"{"style":{},"desktop":{"wallpaper":[],"iconsize":36}}"#;
+        let config: VSKConfig = serde_json::from_str(sin_showfiles).expect("parsea");
+
+        assert!(config.desktop.expect("el escritorio").showfiles);
     }
 
     #[tokio::test]
