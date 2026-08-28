@@ -20,7 +20,10 @@ export default {
   plugins: [
     typescript({
       declaration: true,
-      declarationDir: dirname(pkg.exports.import)
+      declarationDir: dirname(pkg.exports.import),
+      // Las pruebas viven al lado del fuente para importar sin rodeos, pero no son
+      // parte del paquete: sin esto queda un `contraste.test.d.ts` publicado.
+      exclude: ['**/*.test.ts']
     })
   ],
   external: [
