@@ -162,6 +162,146 @@ impl<R: Runtime> ConfigManager<R> {
         })
     }
 
+    /// Si este contenido sirve como configuración.
+    ///
+    /// Es lo que decide entre usar el archivo y reponerlo. Un JSON parcial sí
+    /// sirve —los campos que faltan tienen `#[serde(default)]`—; lo que no
+    /// sirve es lo que no parsea o lo que tiene tipos que no corresponden.
+    fn es_utilizable(contenido: &str) -> bool {
+        serde_json::from_str::<VSKConfig>(contenido).is_ok()
+    }
+
+    /// La configuración por defecto, serializada.
+    fn contenido_por_defecto() -> crate::Result<String> {
+        let default_config = VSKConfig {
+            // Los valores de fábrica viven en el modelo, con los `serde(default)`
+            // que completan un archivo al que le falte una clave: si se
+            // escribieran acá también, las dos copias podrían discrepar.
+            style: Style::default(),
+            desktop: Some(Desktop {
+                wallpaper: vec![],
+                iconsize: 48,
+                showfiles: true,
+                showhiddenfiles: false,
+            }),
+            fonts: Fonts {
+                terminal: String::new(),
+                title: String::new(),
+                apps: String::new(),
+            },
+            icons: Icons {
+                dark: String::new(),
+                light: String::new(),
+            },
+        };
+
+        serde_json::to_string_pretty(&default_config).map_err(crate::Error::Json)
+    }
+
+    /// Aparta el archivo que no sirve y deja uno por defecto en su lugar.
+    ///
+    /// Devuelve el contenido nuevo. Sin `self` para poder probarla.
+    async fn reponer_por_defecto(config_path: &std::path::Path) -> crate::Result<String> {
+        let respaldo = Self::ruta_de_respaldo(config_path);
+        if let Err(error) = tokio::fs::rename(config_path, &respaldo).await {
+            // Que no se pueda apartar no puede dejar al escritorio sin
+            // configuración: se sigue, y el archivo se sobrescribe.
+            eprintln!(
+                "[config-manager] no se pudo apartar la configuración ilegible en {}: {error}",
+                respaldo.display()
+            );
+        }
+
+        let contenido = Self::contenido_por_defecto()?;
+        Self::write_file_atomically(config_path, &contenido).await?;
+        Ok(contenido)
+    }
+
+    /// Adónde se guarda un archivo de configuración que no se pudo leer.
+    ///
+    /// No se borra: puede tener el fondo de pantalla, los widgets y las fuentes
+    /// que alguien eligió, y perder eso en silencio es peor que el problema que
+    /// se está arreglando.
+    fn ruta_de_respaldo(config_path: &std::path::Path) -> std::path::PathBuf {
+        let mut nombre = config_path.file_name().unwrap_or_default().to_os_string();
+        nombre.push(".roto");
+        config_path.with_file_name(nombre)
+    }
+
+    /// El contenido del archivo, garantizando que se pueda usar.
+    ///
+    /// El caso de «no existe» ya estaba cubierto —se crea uno por defecto—, pero
+    /// el de «existe y no sirve» no, y es el peor de los dos: un archivo cortado
+    /// por un apagón o editado a mano devolvía texto que no parsea, la interfaz
+    /// se quedaba sin colores ni fuentes, y **no se recuperaba nunca**, porque
+    /// nada lo reescribía. Cada arranque volvía a estar roto.
+    ///
+    /// Ahora se comprueba que el contenido sea una configuración válida; si no
+    /// lo es, se aparta a un `.roto` y se repone el archivo por defecto.
+    async fn leer_utilizable(&self) -> crate::Result<String> {
+        let config_path = self.config_path()?;
+
+        // Camino rápido, sin cerrojo: el archivo está y sirve, que es lo que
+        // pasa siempre salvo la primera vez o después de un apagón.
+        if config_path.exists() {
+            let contenido = Self::leer_archivo(&config_path).await?;
+            if Self::es_utilizable(&contenido) {
+                return Self::normalizar(&contenido);
+            }
+        }
+
+        let _write_guard = self.write_lock.lock().await;
+        self.leer_utilizable_con_el_cerrojo_tomado(&config_path).await
+    }
+
+    /// Lo mismo, para quien **ya** tiene el cerrojo de escritura.
+    ///
+    /// El cerrojo de tokio no es reentrante: `set_darkmode` lo toma antes de
+    /// leer, así que si la lectura volviera a pedirlo la recuperación se
+    /// quedaría esperándose a sí misma para siempre — justo en el caso en que
+    /// alguien intenta cambiar el tema para salir de una configuración rota.
+    async fn leer_utilizable_con_el_cerrojo_tomado(
+        &self,
+        config_path: &std::path::Path,
+    ) -> crate::Result<String> {
+        if !config_path.exists() {
+            self.create_default_config().await?;
+        }
+
+        // Otro hilo pudo haberlo repuesto mientras se esperaba el cerrojo.
+        let contenido = Self::leer_archivo(config_path).await?;
+        if Self::es_utilizable(&contenido) {
+            return Self::normalizar(&contenido);
+        }
+
+        let repuesto = Self::reponer_por_defecto(config_path).await?;
+        Self::normalizar(&repuesto)
+    }
+
+    /// El contenido con los valores de fábrica ya puestos donde faltaban.
+    ///
+    /// Devolver el texto tal como está en el archivo dejaba a medias el arreglo
+    /// de las claves ausentes: `serde` las completa **al parsear en Rust**, pero
+    /// quien consume `read_config` recibe el JSON crudo y ahí `style.radius`
+    /// sigue sin estar. Normalizando, todos ven una configuración completa.
+    fn normalizar(contenido: &str) -> crate::Result<String> {
+        let config: VSKConfig = serde_json::from_str(contenido).map_err(crate::Error::Json)?;
+        serde_json::to_string_pretty(&config).map_err(crate::Error::Json)
+    }
+
+    async fn leer_archivo(config_path: &std::path::Path) -> crate::Result<String> {
+        tokio::fs::read_to_string(config_path).await.map_err(|e| {
+            crate::Error::Io(std::io::Error::new(
+                e.kind(),
+                format!(
+                    "Failed to read config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+            ))
+        })
+    }
+
     /// Read configuration using cache-first strategy.
     pub async fn read_config(&self) -> crate::Result<String> {
         // Single atomic cache lookup
@@ -175,26 +315,7 @@ impl<R: Runtime> ConfigManager<R> {
         }
 
         // Cache inválido o inexistente: leer de disco y actualizar cache.
-        let config_path = self.config_path()?;
-
-        // Si el archivo no existe, crearlo con una configuración por defecto
-        if !config_path.exists() {
-            let _write_guard = self.write_lock.lock().await;
-            if !config_path.exists() {
-                self.create_default_config().await?;
-            }
-        }
-
-        let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
-            crate::Error::Io(std::io::Error::new(
-                e.kind(),
-                format!(
-                    "Failed to read config file {}: {}",
-                    config_path.display(),
-                    e
-                ),
-            ))
-        })?;
+        let config_content = self.leer_utilizable().await?;
 
         {
             let mut guard = self.cache.write().await;
@@ -410,21 +531,13 @@ impl<R: Runtime> ConfigManager<R> {
 
         let config_path = self.config_path()?;
 
-        // Si el archivo no existe, crearlo con una configuración por defecto
-        if !config_path.exists() {
-            self.create_default_config().await?;
-        }
-
-        let config_content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
-            crate::Error::Io(std::io::Error::new(
-                e.kind(),
-                format!(
-                    "Failed to read config file {}: {}",
-                    config_path.display(),
-                    e
-                ),
-            ))
-        })?;
+        // Por el mismo camino que la lectura: con un archivo ilegible esto
+        // fallaba, así que ni siquiera se podía cambiar el tema para salir del
+        // problema. Con la variante que no vuelve a pedir el cerrojo, que acá ya
+        // está tomado.
+        let config_content = self
+            .leer_utilizable_con_el_cerrojo_tomado(&config_path)
+            .await?;
 
         let mut config: VSKConfig =
             serde_json::from_str(&config_content).map_err(crate::Error::Json)?;
@@ -510,35 +623,8 @@ impl<R: Runtime> ConfigManager<R> {
             })?;
         }
 
-        // Configuración por defecto
-        let default_config = VSKConfig {
-            style: Style {
-                darkmode: false,
-                color_scheme: "vasak-default".to_string(),
-                radius: 8,
-            },
-            desktop: Some(Desktop {
-                wallpaper: vec![],
-                iconsize: 48,
-                showfiles: true,
-                showhiddenfiles: false,
-            }),
-            fonts: Fonts {
-                terminal: String::new(),
-                title: String::new(),
-                apps: String::new(),
-            },
-            icons: Icons {
-                dark: String::new(),
-                light: String::new(),
-            },
-        };
-
-        let config_content =
-            serde_json::to_string_pretty(&default_config).map_err(crate::Error::Json)?;
-
+        let config_content = Self::contenido_por_defecto()?;
         Self::write_file_atomically(config_path.as_path(), &config_content).await?;
-
         Ok(())
     }
 
@@ -648,5 +734,128 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Fallback por seguridad.
         Ok(matching_schemes.into_iter().next())
+    }
+}
+
+#[cfg(test)]
+mod pruebas_de_reposicion {
+    use super::*;
+    use tauri::test::MockRuntime;
+
+    type Manager = ConfigManager<MockRuntime>;
+
+    #[test]
+    fn una_configuracion_completa_sirve() {
+        let completa = r#"{"style":{"darkmode":true,"color-scheme":"vasak-default","radius":10},
+            "desktop":{"wallpaper":[],"iconsize":36,"showfiles":true,"showhiddenfiles":false},
+            "fonts":{"terminal":"","title":"","apps":""},
+            "icons":{"dark":"VasakOS-dark","light":"VasakOS-light"}}"#;
+        assert!(Manager::es_utilizable(completa));
+    }
+
+    #[test]
+    fn una_configuracion_parcial_tambien_sirve() {
+        // Los campos que faltan tienen `#[serde(default)]`: reponer el archivo
+        // por esto sería tirar lo que la persona sí había elegido.
+        assert!(Manager::es_utilizable(r#"{"style":{"darkmode":true}}"#));
+        assert!(Manager::es_utilizable("{}"));
+    }
+
+    #[test]
+    fn lo_que_no_parsea_no_sirve() {
+        // El caso real: un archivo cortado por un apagón o editado a mano. Antes
+        // esto devolvía el texto tal cual, la interfaz se quedaba sin colores ni
+        // fuentes, y no se recuperaba nunca porque nada lo reescribía.
+        assert!(!Manager::es_utilizable(r#"{"style":{"darkmode":true,"color-sch"#));
+        assert!(!Manager::es_utilizable(""));
+        assert!(!Manager::es_utilizable("no soy json"));
+        // Y un tipo que no corresponde: `radius` es un número.
+        assert!(!Manager::es_utilizable(r#"{"style":{"radius":"diez"}}"#));
+    }
+
+    #[test]
+    fn el_respaldo_va_al_lado_del_original() {
+        let ruta = std::path::Path::new("/home/alguien/.config/vasak/vasak.conf");
+        assert_eq!(
+            Manager::ruta_de_respaldo(ruta),
+            std::path::PathBuf::from("/home/alguien/.config/vasak/vasak.conf.roto")
+        );
+    }
+
+    #[test]
+    fn el_contenido_por_defecto_es_utilizable() {
+        // Si no, reponer dejaría el archivo tan roto como estaba y el escritorio
+        // entraría en un ciclo de reponer y volver a fallar.
+        let contenido = Manager::contenido_por_defecto().expect("se serializa");
+        assert!(Manager::es_utilizable(&contenido));
+    }
+
+    #[test]
+    fn a_una_clave_que_falta_se_le_pone_el_valor_de_fabrica() {
+        // Y no se repone el archivo: adentro puede estar el fondo de pantalla,
+        // los widgets y las fuentes que la persona eligió, y perder todo eso
+        // porque falta `radius` sería peor que el problema.
+        let sin_radio = r#"{"style":{"darkmode":true,"color-scheme":"vasak-default"},
+            "desktop":{"wallpaper":["/un/fondo.jpg"],"iconsize":36,
+                       "showfiles":true,"showhiddenfiles":false}}"#;
+        let config: VSKConfig = serde_json::from_str(sin_radio).expect("tiene que parsear");
+
+        assert_eq!(config.style.radius, 8, "el radio de fábrica");
+        assert!(config.style.darkmode, "lo que sí estaba se respeta");
+        assert_eq!(
+            config.desktop.expect("el escritorio").wallpaper,
+            vec!["/un/fondo.jpg".to_string()],
+            "y el fondo no se pierde"
+        );
+    }
+
+    #[test]
+    fn normalizar_completa_lo_que_falta() {
+        // Lo que faltaba del arreglo anterior: `serde` completa las claves al
+        // parsear en Rust, pero quien consume `read_config` recibía el JSON
+        // crudo y ahí `radius` seguía sin estar. Ahora se devuelve normalizado.
+        let sin_radio = r#"{"style":{"darkmode":true,"color-scheme":"vasak-default"}}"#;
+        let normalizado = Manager::normalizar(sin_radio).expect("normaliza");
+        let valor: serde_json::Value = serde_json::from_str(&normalizado).expect("parsea");
+
+        assert_eq!(valor["style"]["radius"], 8, "el radio de fábrica, ya escrito");
+        assert_eq!(valor["style"]["darkmode"], true, "y lo que sí estaba se respeta");
+    }
+
+    #[test]
+    fn los_archivos_del_escritorio_se_muestran_si_no_dice_lo_contrario() {
+        // `#[serde(default)]` sobre un `bool` da `false`: a un archivo al que le
+        // faltara esta clave se le escondían los archivos del escritorio sin que
+        // nadie lo hubiera pedido.
+        let sin_showfiles = r#"{"style":{},"desktop":{"wallpaper":[],"iconsize":36}}"#;
+        let config: VSKConfig = serde_json::from_str(sin_showfiles).expect("parsea");
+
+        assert!(config.desktop.expect("el escritorio").showfiles);
+    }
+
+    #[tokio::test]
+    async fn reponer_aparta_el_roto_y_deja_uno_que_sirve() {
+        let base = std::env::temp_dir().join(format!("config-manager-prueba-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("directorio de prueba");
+        let ruta = base.join("vasak.conf");
+
+        let roto = r#"{"style":{"darkmode":true,"color-sch"#;
+        std::fs::write(&ruta, roto).expect("escribir el roto");
+
+        let contenido = Manager::reponer_por_defecto(&ruta).await.expect("repone");
+
+        assert!(Manager::es_utilizable(&contenido));
+        assert!(Manager::es_utilizable(
+            &std::fs::read_to_string(&ruta).expect("leer el nuevo")
+        ));
+
+        // Y lo que había no se pierde: puede tener el fondo de pantalla, los
+        // widgets y las fuentes que alguien eligió.
+        let respaldo = std::fs::read_to_string(Manager::ruta_de_respaldo(&ruta))
+            .expect("el respaldo tiene que estar");
+        assert_eq!(respaldo, roto);
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
