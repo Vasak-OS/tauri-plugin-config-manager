@@ -28,3 +28,9 @@ tracing = "0.1"
 
 [build-dependencies]
 tauri-plugin = { version = "2", features = ["build"] }
+
+[dev-dependencies]
+#  para poder instanciar el tipo genérico en las pruebas, y el
+# runtime asíncrono para las que tocan archivos.
+tauri = { version = "2", features = ["test"] }
+tokio = { version = "1", features = ["macros", "rt", "fs"] }

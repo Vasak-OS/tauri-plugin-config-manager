@@ -126,18 +126,21 @@ export type AnsiColors = {
   brightWhite: string;
 };
 
-let configStore: ReturnType<
-  typeof defineStore<
-    "config",
-    () => {
-      config: any;
-      loadConfig: () => Promise<void>;
-    }
-  >
-> | null = null;
-
-export const useConfigStore = () => {
-  configStore ??= defineStore("config", () => {
+/**
+ * El store, definido una sola vez y con su tipo **inferido**.
+ *
+ * Antes `configStore` llevaba una anotación explícita
+ * —`ReturnType<typeof defineStore<"config", () => {...}>>`— y eso es lo que
+ * publicaba los parámetros del `Store` como `Pick`: quien lo usara no veía
+ * `loadConfig` y tenía que escribir una aserción para poder llamarlo. Había 28
+ * en el escritorio, y una de ellas metía `loadConfig` en el parámetro del
+ * estado, con lo cual `vue-tsc` dejaba de comprobar la llamada.
+ *
+ * Dejando que TypeScript infiera el tipo desde la propia definición, el store
+ * sale tipado y las aserciones dejan de hacer falta.
+ */
+const definirConfigStore = () =>
+  defineStore("config", () => {
     const config = ref<VSKConfig | null>(null);
 
     const loadConfig = async () => {
@@ -446,5 +449,9 @@ export const useConfigStore = () => {
     };
   });
 
+let configStore: ReturnType<typeof definirConfigStore> | null = null;
+
+export const useConfigStore = () => {
+  configStore ??= definirConfigStore();
   return configStore();
 };
