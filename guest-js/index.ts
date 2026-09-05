@@ -144,6 +144,80 @@ export function bordeFuerteSobre(paleta: UiColors): string | null {
   );
 }
 
+/**
+ * Para qué se usa una fuente. Determina en qué genérica termina la pila.
+ */
+export type RolDeFuente = "apps" | "title" | "terminal";
+
+/**
+ * La familia genérica con la que termina cada pila.
+ *
+ * La de la terminal es `monospace` y no `sans-serif`, que es la diferencia que
+ * importa: si la fuente elegida no está, una terminal con ancho variable no es
+ * una terminal fea, es una que dibuja mal las tablas, las barras de progreso y
+ * todo lo que se alinee por columnas.
+ */
+const GENERICA: Record<RolDeFuente, string> = {
+  apps: "sans-serif",
+  title: "sans-serif",
+  terminal: "monospace",
+};
+
+/**
+ * Lo que no puede entrar en un nombre de familia.
+ *
+ * El nombre sale de `vasak.conf`, que es un archivo que se edita a mano, así
+ * que puede traer cualquier cosa. Va dentro de una cadena CSS entre comillas:
+ * una comilla o una barra invertida sin escapar la cierran antes de tiempo y
+ * el resto pasa a ser CSS. Se sacan también los caracteres de control y los
+ * saltos de línea, que hacen lo mismo.
+ *
+ * Se quitan en lugar de escaparse porque ninguno aparece en el nombre real de
+ * una fuente: escapar dejaría pasar un nombre absurdo, quitarlos deja el más
+ * parecido al que se quiso poner.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: son justo los que hay que sacar.
+const PROHIBIDOS = /['"\\;{}()<>\u0000-\u001f\u007f]/g;
+
+/**
+ * La pila de fuentes para un rol, lista para `font-family`.
+ *
+ * Siempre termina en una familia genérica. Sin eso, una fuente que se
+ * desinstala —o un nombre mal escrito en `vasak.conf`— deja a las
+ * aplicaciones sin ninguna fuente declarada, y el motor cae en la suya por
+ * omisión, que no tiene por qué parecerse en nada al resto del escritorio.
+ *
+ * El nombre va entre comillas simples porque casi todos los del sistema tienen
+ * espacios —«Noto Sans», «MesloLGL Nerd Font Mono»— y sin comillas hay que
+ * confiar en que cada palabra sea un identificador CSS válido: uno que empiece
+ * con un dígito, como «3270 Nerd Font», invalida la declaración entera y se
+ * pierde también la genérica.
+ *
+ * Devolver una cadena válida siempre, y nunca vacía, es parte del contrato:
+ * `setProperty` con un valor vacío **borra** la propiedad, y entonces el
+ * `var(--font-apps)` de las hojas de estilo se queda sin valor y la regla se
+ * descarta.
+ */
+export function pilaDeFuente(
+  nombre: string | null | undefined,
+  rol: RolDeFuente,
+): string {
+  const generica = GENERICA[rol];
+  const limpio = (nombre ?? "").replace(PROHIBIDOS, "").trim();
+
+  if (limpio === "") {
+    return generica;
+  }
+
+  // Si ya es el nombre de la genérica, no se repite: `monospace, monospace` es
+  // válido pero absurdo, y delata el error a quien lea el CSS.
+  if (limpio === generica) {
+    return generica;
+  }
+
+  return `'${limpio}', ${generica}`;
+}
+
 export type VSKConfig = {
   style: {
     darkmode: boolean;
@@ -567,22 +641,41 @@ const definirConfigStore = () =>
         );
       }
 
-      // The fonts were read and then dropped: Configuración wrote the choice
-      // into vasak.conf and no application ever looked at it, so picking a font
-      // changed nothing anywhere. They are applied here, next to the colours,
-      // because that is what makes every application follow the configuration
-      // without each one having to remember to.
-      const fonts = config.value?.fonts;
+      // Las tres fuentes se aplican acá, al lado de los colores, porque es lo
+      // que hace que toda aplicación siga la configuración sin que cada una
+      // tenga que acordarse. Antes se leían y se tiraban: Configuración
+      // escribía la elección en `vasak.conf` y nadie la miraba, así que elegir
+      // una fuente no cambiaba nada en ninguna parte.
+      const fuentes = config.value?.fonts;
       const root = document.documentElement.style;
 
-      root.setProperty("--font-apps", fonts?.apps || "");
-      root.setProperty("--font-title", fonts?.title || fonts?.apps || "");
-      root.setProperty("--font-terminal", fonts?.terminal || "");
+      // Con prefijo `--vsk-` para no chocar con los tokens de Tailwind. Las
+      // hojas de estilo definen `--font-sans`, `--font-mono` y `--font-title`
+      // **en función** de estas tres, y una variable que se define a sí misma
+      // no resuelve.
+      const deApps = pilaDeFuente(fuentes?.apps, "apps");
 
-      // Set on the element rather than left to each stylesheet: an inline style
-      // beats Tailwind's own `font-family` on <html>, which is what would
-      // otherwise win and keep the default font on screen.
-      root.fontFamily = fonts?.apps || "";
+      root.setProperty("--vsk-font-apps", deApps);
+      // El título cae en la de las aplicaciones antes que en la genérica: son
+      // la misma familia por omisión, y quien eligió una sola quiere esa.
+      root.setProperty(
+        "--vsk-font-title",
+        pilaDeFuente(fuentes?.title || fuentes?.apps, "title"),
+      );
+      root.setProperty(
+        "--vsk-font-terminal",
+        pilaDeFuente(fuentes?.terminal, "terminal"),
+      );
+
+      // Y además en el elemento, que es el piso.
+      //
+      // Con esto una aplicación sigue la fuente configurada **aunque su hoja de
+      // estilo no declare los tokens**: se hereda a todo el documento. Importa
+      // porque el plugin y las aplicaciones se actualizan por separado, y sin
+      // este piso una que quedara atrás volvería a la fuente del motor sin que
+      // nada lo dijera. Las utilidades de Tailwind lo pisan donde se usen, que
+      // es lo que se busca para el título y la terminal.
+      root.fontFamily = deApps;
     };
 
     return {
