@@ -180,6 +180,32 @@ const GENERICA: Record<RolDeFuente, string> = {
 const PROHIBIDOS = /['"\\;{}()<>\u0000-\u001f\u007f]/g;
 
 /**
+ * El nombre sin lo que no puede entrar en una familia CSS.
+ *
+ * Separado de `pilaDeFuente` porque hace falta antes de elegir entre varios
+ * candidatos: decidir con el nombre crudo y sanear después descarta una fuente
+ * buena cuando la primera opción es basura que *parece* un valor.
+ */
+function limpiar(nombre: string | null | undefined): string {
+  return (nombre ?? "").replace(PROHIBIDOS, "").trim();
+}
+
+/**
+ * El primero de la lista que quede en algo después de sanear.
+ *
+ * La cascada tiene que mirar el nombre **ya saneado**, no el crudo. Un título
+ * de sólo espacios es una cadena verdadera para `||`, así que ganaba la
+ * comparación, se saneaba a nada y terminaba en la genérica — descartando una
+ * fuente de aplicaciones que estaba bien. Lo mismo con un nombre que sea todo
+ * caracteres prohibidos.
+ */
+export function primeraUtil(
+  ...candidatos: Array<string | null | undefined>
+): string {
+  return candidatos.map(limpiar).find((nombre) => nombre !== "") ?? "";
+}
+
+/**
  * La pila de fuentes para un rol, lista para `font-family`.
  *
  * Siempre termina en una familia genérica. Sin eso, una fuente que se
@@ -203,7 +229,7 @@ export function pilaDeFuente(
   rol: RolDeFuente,
 ): string {
   const generica = GENERICA[rol];
-  const limpio = (nombre ?? "").replace(PROHIBIDOS, "").trim();
+  const limpio = limpiar(nombre);
 
   if (limpio === "") {
     return generica;
@@ -660,7 +686,7 @@ const definirConfigStore = () =>
       // la misma familia por omisión, y quien eligió una sola quiere esa.
       root.setProperty(
         "--vsk-font-title",
-        pilaDeFuente(fuentes?.title || fuentes?.apps, "title"),
+        pilaDeFuente(primeraUtil(fuentes?.title, fuentes?.apps), "title"),
       );
       root.setProperty(
         "--vsk-font-terminal",

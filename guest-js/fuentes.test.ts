@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { pilaDeFuente } from './index';
+import { pilaDeFuente, primeraUtil } from './index';
 
 /**
  * Las tres fuentes que ofrece Configuración —título, aplicaciones y terminal—
@@ -64,5 +64,41 @@ describe('la pila de fuentes', () => {
 	test('no repite la genérica cuando es lo que se eligió', () => {
 		expect(pilaDeFuente('monospace', 'terminal')).toBe('monospace');
 		expect(pilaDeFuente('sans-serif', 'apps')).toBe('sans-serif');
+	});
+});
+
+/**
+ * La cascada del título: si no hay una propia, se usa la de las aplicaciones.
+ * Lo que importa es que decida mirando el nombre **ya saneado**.
+ */
+describe('la cascada entre candidatos', () => {
+	test('se queda con el primero que sirva', () => {
+		expect(primeraUtil('Cantarell', 'Noto Sans')).toBe('Cantarell');
+	});
+
+	test('un título de sólo espacios no le gana a una fuente buena', () => {
+		// Es el caso que fallaba: `'   ' || 'Noto Sans'` devuelve los espacios,
+		// porque una cadena de espacios es verdadera. Se saneaba a nada después
+		// de haber ganado la comparación, y el título terminaba en la genérica
+		// con una fuente de aplicaciones perfectamente buena a mano.
+		expect(primeraUtil('   ', 'Noto Sans')).toBe('Noto Sans');
+	});
+
+	test('ni un título que sea todo caracteres prohibidos', () => {
+		expect(primeraUtil('{};', 'Noto Sans')).toBe('Noto Sans');
+		expect(primeraUtil('()', 'Cantarell')).toBe('Cantarell');
+	});
+
+	test('salta los vacíos, los nulos y los indefinidos', () => {
+		expect(primeraUtil(null, undefined, '', 'Noto Sans')).toBe('Noto Sans');
+	});
+
+	test('sin ningún candidato útil devuelve vacío, y la pila cae en la genérica', () => {
+		expect(primeraUtil(null, '  ', '')).toBe('');
+		expect(pilaDeFuente(primeraUtil(null, '  ', ''), 'title')).toBe('sans-serif');
+	});
+
+	test('devuelve el nombre saneado, no el crudo', () => {
+		expect(primeraUtil('  Noto Sans  ')).toBe('Noto Sans');
 	});
 });
