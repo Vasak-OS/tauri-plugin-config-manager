@@ -343,6 +343,9 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Aplicar icon pack en runtime según el modo actual guardado.
         Self::try_apply_icon_pack(&parsed_config.icons, parsed_config.style.darkmode);
+        // Y las fuentes, por lo mismo: elegirlas en Ajustes tiene que llegar a
+        // las aplicaciones ajenas y no sólo a las propias.
+        Self::try_apply_fonts(&parsed_config.fonts);
 
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
@@ -490,6 +493,65 @@ impl<R: Runtime> ConfigManager<R> {
 
     #[cfg(not(feature = "system-theme-sync"))]
     fn try_sync_system_darkmode(_darkmode: bool) {}
+
+    /// Lleva las fuentes elegidas a donde las leen las aplicaciones ajenas.
+    ///
+    /// `vasak.conf` lo leen las aplicaciones propias; esto es la otra mitad.
+    /// Escribe los dos sitios que hacen falta y por motivos distintos:
+    ///
+    /// * el `settings.ini` de GTK, que es el que se lee **al arrancar** y por lo
+    ///   tanto el que decide cómo se ve la sesión después de reiniciar;
+    /// * las claves de GSettings, que son las que informa el portal a las
+    ///   aplicaciones aisladas y las que usa GTK4.
+    ///
+    /// Las aplicaciones Qt vienen de arriba: su tema de plataforma es el de GTK
+    /// —`QT_QPA_PLATFORMTHEME=gtk3`, que trae `qt6-base`— así que leen esto
+    /// mismo y no hace falta un tercer archivo que mantener en sincronía.
+    ///
+    /// La monoespaciada sale de la fuente de la terminal, que es la que se elige
+    /// en Ajustes: tener dos monoespaciadas distintas —una para la terminal y
+    /// otra para el resto— sería justo la divergencia que esto viene a cerrar.
+    #[cfg(feature = "system-theme-sync")]
+    fn try_apply_fonts(fonts: &crate::models::Fonts) {
+        crate::gtk_settings::aplicar_fuente(&fonts.apps);
+
+        if !Self::has_gsettings_binary() {
+            return;
+        }
+
+        // Cada clave con el cuerpo que ya tenía: cambiar de tipografía no tiene
+        // por qué devolver a 11 a quien lo subió a 13 para ver mejor.
+        let claves = [
+            ("font-name", fonts.apps.trim()),
+            ("document-font-name", fonts.apps.trim()),
+            ("monospace-font-name", fonts.terminal.trim()),
+        ];
+
+        for (clave, familia) in claves {
+            if familia.is_empty() {
+                continue;
+            }
+            let actual = Self::run_gsettings(&["get", "org.gnome.desktop.interface", clave])
+                .unwrap_or_default();
+            let actual = actual.trim().trim_matches('\'').trim_matches('"');
+            let deseado = crate::gtk_settings::con_familia(actual, familia);
+
+            if actual == deseado {
+                continue;
+            }
+            if let Err(e) = Self::run_gsettings(&[
+                "set",
+                "org.gnome.desktop.interface",
+                clave,
+                &deseado,
+            ]) {
+                tracing::error!("Could not set GNOME {}: {}", clave, e);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "system-theme-sync"))]
+    fn try_apply_fonts(_fonts: &crate::models::Fonts) {}
 
     #[cfg(feature = "system-theme-sync")]
     fn try_apply_icon_pack(icons: &Icons, darkmode: bool) {
