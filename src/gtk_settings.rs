@@ -123,6 +123,89 @@ fn write_atomically(path: &std::path::Path, content: &str) -> std::io::Result<()
     Ok(())
 }
 
+/// El cuerpo que se usa cuando no había ninguno de dónde sacarlo.
+///
+/// Es el mismo que envía `vasak-desktop-settings` en su `settings.ini`, para que
+/// una sesión sin nada escrito y una recién configurada se vean igual.
+const CUERPO_POR_OMISION: &str = "11";
+
+/// Cambia la familia de una descripción de fuente y **conserva el cuerpo**.
+///
+/// Las fuentes de `vasak.conf` son sólo familias —«Noto Sans»— y GTK quiere
+/// «familia cuerpo». El cuerpo sale del valor que ya había: si alguien lo subió
+/// a 13 porque ve mejor así, elegir otra tipografía no tiene por qué devolverlo
+/// a 11.
+///
+/// Pango acepta una lista separada por comas antes del cuerpo, y el valor que
+/// veníamos enviando era «Noto Sans,  11» —con coma y dos espacios—, así que la
+/// separación no puede ser por el último espacio: se busca el último trozo que
+/// sea un número.
+pub fn con_familia(actual: &str, familia: &str) -> String {
+    let familia = familia.trim();
+    let cuerpo = actual
+        .rsplit_once(' ')
+        .map(|(_, ultimo)| ultimo.trim())
+        .filter(|ultimo| !ultimo.is_empty() && ultimo.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or(CUERPO_POR_OMISION);
+
+    format!("{familia} {cuerpo}")
+}
+
+/// Deja la fuente de la interfaz en el `settings.ini` de cada versión de GTK.
+///
+/// Es la mitad que faltaba de «aplicar fuentes»: la pantalla de Ajustes escribía
+/// `vasak.conf` —que leen las aplicaciones propias— y nada más, así que Firefox,
+/// LibreOffice y cualquier otra aplicación GTK seguían con la fuente de antes.
+/// Las Qt también, porque su tema de plataforma es el de GTK y lee esto mismo.
+pub fn aplicar_fuente(familia: &str) {
+    let familia = familia.trim();
+    if familia.is_empty() {
+        // Una familia vacía no se escribe: dejaría a las aplicaciones sin
+        // ninguna, que es peor que dejarlas con la que tenían.
+        return;
+    }
+
+    let Some(config_home) = config_home() else {
+        tracing::warn!("No home directory; skipping GTK font update");
+        return;
+    };
+
+    for directory in GTK_CONFIG_DIRS {
+        let directory = config_home.join(directory);
+        if let Err(e) = std::fs::create_dir_all(&directory) {
+            tracing::warn!(
+                "Could not create GTK config directory {}: {}",
+                directory.display(),
+                e
+            );
+            continue;
+        }
+
+        let path = directory.join("settings.ini");
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let actual = valor_actual(&existing, "gtk-font-name").unwrap_or_default();
+        let deseado = con_familia(&actual, familia);
+
+        let merged = merged_settings(&existing, &[("gtk-font-name", deseado.as_str())]);
+        if merged == existing {
+            continue;
+        }
+        if let Err(e) = std::fs::write(&path, &merged) {
+            tracing::warn!("Could not write {}: {}", path.display(), e);
+        }
+    }
+}
+
+/// El valor de una clave en `[Settings]`, si está.
+fn valor_actual(contenido: &str, clave: &str) -> Option<String> {
+    let prefijo = format!("{clave}=");
+    contenido
+        .lines()
+        .map(str::trim)
+        .find_map(|linea| linea.strip_prefix(&prefijo))
+        .map(|valor| valor.trim().to_string())
+}
+
 /// Records the appearance for the next time a GTK application starts.
 ///
 /// `icon_pack` empty means the configuration names no pack for this mode; the
@@ -360,5 +443,46 @@ mod tests {
 
         assert!(result.contains("gtk-application-prefer-dark-theme=false"));
         assert!(!result.contains("prefer-dark-theme=true"));
+    }
+
+    #[test]
+    fn cambiar_la_familia_conserva_el_cuerpo() {
+        // Si alguien subió la letra a 13 porque ve mejor así, elegir otra
+        // tipografía no tiene por qué devolverlo a 11.
+        assert_eq!(con_familia("Cantarell 13", "Noto Sans"), "Noto Sans 13");
+    }
+
+    #[test]
+    fn el_valor_con_coma_y_dos_espacios_tambien() {
+        // Es el que veníamos enviando: «Noto Sans,  11». Partir por el último
+        // espacio a secas dejaría el cuerpo pegado a una cadena vacía.
+        assert_eq!(con_familia("Noto Sans,  11", "MesloLGL Nerd Font Mono"),
+                   "MesloLGL Nerd Font Mono 11");
+    }
+
+    #[test]
+    fn una_familia_de_varias_palabras_no_se_confunde_con_el_cuerpo() {
+        assert_eq!(con_familia("MesloLGL Nerd Font Mono 10", "Noto Sans"), "Noto Sans 10");
+    }
+
+    #[test]
+    fn sin_cuerpo_se_usa_el_que_enviamos() {
+        // Un valor que es sólo la familia, o un archivo sin la clave.
+        assert_eq!(con_familia("Cantarell", "Noto Sans"), "Noto Sans 11");
+        assert_eq!(con_familia("", "Noto Sans"), "Noto Sans 11");
+    }
+
+    #[test]
+    fn el_cuerpo_tiene_que_ser_un_numero() {
+        // «Noto Sans Bold» no lleva cuerpo: «Bold» no es uno, y tomarlo daría
+        // «Noto Sans Bold» como cuerpo y una descripción inválida.
+        assert_eq!(con_familia("Noto Sans Bold", "Cantarell"), "Cantarell 11");
+    }
+
+    #[test]
+    fn se_lee_el_valor_que_ya_estaba_en_el_archivo() {
+        let archivo = "[Settings]\ngtk-theme-name=Adwaita\ngtk-font-name=Cantarell 13\n";
+        assert_eq!(valor_actual(archivo, "gtk-font-name"), Some("Cantarell 13".into()));
+        assert_eq!(valor_actual(archivo, "gtk-icon-theme-name"), None);
     }
 }
