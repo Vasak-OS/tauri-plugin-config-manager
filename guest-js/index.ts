@@ -255,6 +255,14 @@ export type VSKConfig = {
     iconsize: number;
     showfiles: boolean;
     showhiddenfiles: boolean;
+    /**
+     * Las claves del escritorio que este plugin no define.
+     *
+     * Acá viven cosas que escribe y lee otra aplicación —la disposición de los
+     * widgets, por ejemplo— y que este plugin sólo transporta. Declararlas
+     * imposibles obligaba a escribir aserciones para poder guardarlas.
+     */
+    [clave: string]: unknown;
   };
   fonts: {
     terminal: string;
