@@ -183,16 +183,20 @@ impl<R: Runtime> ConfigManager<R> {
                 iconsize: 48,
                 showfiles: true,
                 showhiddenfiles: false,
+                extra: Default::default(),
             }),
             fonts: Fonts {
                 terminal: String::new(),
                 title: String::new(),
                 apps: String::new(),
+                extra: Default::default(),
             },
             icons: Icons {
                 dark: String::new(),
                 light: String::new(),
+                extra: Default::default(),
             },
+            extra: Default::default(),
         };
 
         serde_json::to_string_pretty(&default_config).map_err(crate::Error::Json)
@@ -882,6 +886,68 @@ mod pruebas_de_reposicion {
 
         assert_eq!(valor["style"]["radius"], 8, "el radio de fábrica, ya escrito");
         assert_eq!(valor["style"]["darkmode"], true, "y lo que sí estaba se respeta");
+    }
+
+    #[test]
+    fn normalizar_no_se_come_los_widgets() {
+        // El síntoma: acomodar los widgets del escritorio y después cambiar
+        // cualquier cosa en Ajustes —el tema, la fuente— los devolvía a la
+        // disposición de fábrica. `read_config` no devuelve el archivo, devuelve
+        // este modelo reserializado, y el modelo no conoce `desktop.widgets`: la
+        // clave desaparecía de lo que ve la interfaz, y el `writeConfig` que
+        // viene después la borraba también del disco.
+        let con_widgets = r#"{"style":{},
+            "desktop":{"wallpaper":[],"iconsize":48,
+                       "widgets":[{"id":"clock-1","type":"clock","x":0,"y":0,"w":2,"h":2}]},
+            "panel":{"posicion":"abajo"}}"#;
+        let normalizado = Manager::normalizar(con_widgets).expect("normaliza");
+        let valor: serde_json::Value = serde_json::from_str(&normalizado).expect("parsea");
+
+        assert_eq!(
+            valor["desktop"]["widgets"][0]["id"], "clock-1",
+            "el widget acomodado sigue ahí"
+        );
+        assert_eq!(valor["desktop"]["widgets"][0]["w"], 2, "y con su tamaño");
+        assert_eq!(
+            valor["panel"]["posicion"], "abajo",
+            "y cualquier otra sección que el modelo no conozca, también"
+        );
+        assert_eq!(valor["style"]["radius"], 8, "sin dejar de completar lo que falta");
+    }
+
+    #[test]
+    fn cambiar_el_tema_no_se_come_los_widgets() {
+        // `set_darkmode` no reescribe el archivo tal cual: lo parsea a este
+        // modelo y lo vuelve a serializar. Es el otro camino por el que se
+        // perdían los widgets, y directo en el disco.
+        let con_widgets = r#"{"style":{"darkmode":false},
+            "desktop":{"widgets":[{"id":"clock-1","type":"clock","x":0,"y":0,"w":2,"h":2}]}}"#;
+        let mut config: VSKConfig = serde_json::from_str(con_widgets).expect("parsea");
+
+        config.style.darkmode = true;
+
+        let escrito = serde_json::to_string_pretty(&config).expect("se serializa");
+        let valor: serde_json::Value = serde_json::from_str(&escrito).expect("parsea");
+
+        assert_eq!(valor["style"]["darkmode"], true, "el modo oscuro se aplicó");
+        assert_eq!(
+            valor["desktop"]["widgets"][0]["id"], "clock-1",
+            "y los widgets siguen acomodados"
+        );
+    }
+
+    #[test]
+    fn una_seccion_a_medias_no_cuesta_el_archivo() {
+        // A `fonts` le faltaban los valores de fábrica por campo: un archivo con
+        // una sola fuente escrita no parseaba, y no parsear cuesta el archivo
+        // entero —se aparta a `.roto` y se repone—, o sea el fondo de pantalla y
+        // los widgets de quien lo tuviera así.
+        let a_medias = r#"{"style":{},"fonts":{"terminal":"Fira Code"}}"#;
+        assert!(Manager::es_utilizable(a_medias));
+
+        let config: VSKConfig = serde_json::from_str(a_medias).expect("parsea");
+        assert_eq!(config.fonts.terminal, "Fira Code");
+        assert!(config.fonts.apps.is_empty(), "lo que falta queda vacío");
     }
 
     #[test]

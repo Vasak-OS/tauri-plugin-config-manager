@@ -9,25 +9,52 @@ pub struct VSKConfig {
     /// que no parsea se aparta y se repone.
     #[serde(default)]
     pub style: Style,
+    #[serde(default)]
     pub desktop: Option<Desktop>,
     #[serde(default)]
     pub fonts: Fonts,
     #[serde(default)]
     pub icons: Icons,
+    /// Todo lo demás que haya en el archivo, tal como está.
+    ///
+    /// El modelo no conoce todas las claves de la configuración —los widgets del
+    /// escritorio, por ejemplo, los escribe el escritorio y los lee sólo él—, y
+    /// hasta ahora lo que no estaba acá se perdía: `read_config` devuelve la
+    /// configuración **reserializada** desde este modelo, así que cada lectura
+    /// borraba esas claves de lo que ve la interfaz, y el próximo `writeConfig`
+    /// —cambiar el tema, la fuente, cualquier cosa en Ajustes— las borraba del
+    /// disco. Los widgets acomodados volvían a la disposición de fábrica.
+    ///
+    /// Con esto, lo que el modelo no conoce entra, sale y vuelve al archivo
+    /// igual que estaba.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Fonts {
+    #[serde(default)]
     pub terminal: String,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub apps: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
+    /// Ver [`VSKConfig::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Icons {
+    #[serde(default)]
     pub dark: String,
     #[serde(default, alias = "light")]
     pub light: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
+    /// Ver [`VSKConfig::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,6 +70,10 @@ pub struct Desktop {
     pub showfiles: bool,
     #[serde(default)]
     pub showhiddenfiles: bool,
+    /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
+    /// Ver [`VSKConfig::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn tamano_de_icono_por_defecto() -> u32 {
@@ -64,6 +95,10 @@ pub struct Style {
     pub color_scheme: String,
     #[serde(default = "radio_por_defecto")]
     pub radius: u32,
+    /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
+    /// Ver [`VSKConfig::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn esquema_por_defecto() -> String {
@@ -81,6 +116,7 @@ impl Default for Style {
             darkmode: false,
             color_scheme: esquema_por_defecto(),
             radius: radio_por_defecto(),
+            extra: serde_json::Map::new(),
         }
     }
 }
