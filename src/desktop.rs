@@ -343,9 +343,6 @@ impl<R: Runtime> ConfigManager<R> {
 
         // Aplicar icon pack en runtime según el modo actual guardado.
         Self::try_apply_icon_pack(&parsed_config.icons, parsed_config.style.darkmode);
-        // Y las fuentes, por lo mismo: elegirlas en Ajustes tiene que llegar a
-        // las aplicaciones ajenas y no sólo a las propias.
-        Self::try_apply_fonts(&parsed_config.fonts);
 
         // Crear el directorio padre si no existe
         if let Some(parent) = config_path.parent() {
@@ -362,6 +359,17 @@ impl<R: Runtime> ConfigManager<R> {
         }
 
         Self::write_file_atomically(config_path.as_path(), config).await?;
+
+        // Las fuentes se aplican **acá**, después de que `vasak.conf` quedó
+        // escrito, y no antes con el pack de iconos.
+        //
+        // Antes iban arriba, y si crear el directorio o la escritura atómica
+        // fallaban, `write_config` devolvía el error con las fuentes de GTK y de
+        // GSettings **ya cambiadas**: un guardado fallido dejaba el sistema con
+        // una tipografía que la configuración no dice en ninguna parte, y sin
+        // forma de volver salvo elegir otra y guardar bien.
+        Self::try_apply_fonts(&parsed_config.fonts);
+
         // Actualizar cache inmediatamente con el contenido provisto
         {
             let mut guard = self.cache.write().await;
@@ -383,12 +391,63 @@ impl<R: Runtime> ConfigManager<R> {
         Ok(Self::home_dir()?.join(".config/vasak/vasak.conf"))
     }
 
+    /// Cuánto se le da a `gsettings` antes de darlo por perdido.
+    ///
+    /// Sin tope, cada llamada podía esperar para siempre **con `write_lock`
+    /// tomado**, así que un D-Bus trabado no dejaba guardar la configuración
+    /// nunca más — y esta rama sumó seis llamadas más al camino de guardado, lo
+    /// que agranda esa ventana. Leer o escribir un ajuste es cuestión de
+    /// milisegundos; dos segundos ya son un problema del sistema, y ante eso
+    /// vale más seguir sin sincronizar que quedarse colgado.
+    #[cfg(feature = "system-theme-sync")]
+    const PLAZO_GSETTINGS: Duration = Duration::from_secs(2);
+
     #[cfg(feature = "system-theme-sync")]
     fn run_gsettings(args: &[&str]) -> crate::Result<String> {
-        let output = Command::new("gsettings").args(args).output().map_err(|e| {
+        let mut hijo = Command::new("gsettings")
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                crate::Error::Io(std::io::Error::new(
+                    e.kind(),
+                    format!("Failed to run gsettings {}: {}", args.join(" "), e),
+                ))
+            })?;
+
+        // Se sondea en lugar de esperar: `wait_with_output` no tiene forma de
+        // rendirse. La salida va a tuberías y son dos líneas, así que no hay
+        // riesgo de llenar el buffer mientras se sondea.
+        let empezo = Instant::now();
+        loop {
+            match hijo.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {}
+                Err(e) => {
+                    return Err(crate::Error::Io(std::io::Error::new(
+                        e.kind(),
+                        format!("Failed to wait for gsettings {}: {}", args.join(" "), e),
+                    )))
+                }
+            }
+            if empezo.elapsed() >= Self::PLAZO_GSETTINGS {
+                let _ = hijo.kill();
+                let _ = hijo.wait();
+                return Err(crate::Error::Io(std::io::Error::other(format!(
+                    "gsettings {} no contestó en {} s",
+                    args.join(" "),
+                    Self::PLAZO_GSETTINGS.as_secs()
+                ))));
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        let output = hijo.wait_with_output().map_err(|e| {
             crate::Error::Io(std::io::Error::new(
                 e.kind(),
-                format!("Failed to run gsettings {}: {}", args.join(" "), e),
+                format!("Failed to read gsettings {}: {}", args.join(" "), e),
             ))
         })?;
 

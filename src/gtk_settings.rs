@@ -190,20 +190,39 @@ pub fn aplicar_fuente(familia: &str) {
         if merged == existing {
             continue;
         }
-        if let Err(e) = std::fs::write(&path, &merged) {
+        // `write_atomically` y no `std::fs::write`: éste trunca el archivo antes
+        // de terminar de escribirlo, así que una interrupción a mitad de camino
+        // deja a GTK con un `settings.ini` vacío o partido — y GTK lo lee al
+        // arrancar. Es el mismo helper que usa `apply()` doce líneas más arriba.
+        if let Err(e) = write_atomically(&path, &merged) {
             tracing::warn!("Could not write {}: {}", path.display(), e);
         }
     }
 }
 
-/// El valor de una clave en `[Settings]`, si está.
+/// El valor de una clave **dentro de `[Settings]`**, si está.
+///
+/// Se sigue la sección en lugar de buscar la clave en todo el archivo: estos
+/// `settings.ini` tienen más de una —hay un test de este módulo con `[Debug]`—
+/// y una clave homónima en otra sección haría que se conservara un cuerpo que
+/// no es el que GTK está usando.
 fn valor_actual(contenido: &str, clave: &str) -> Option<String> {
     let prefijo = format!("{clave}=");
-    contenido
-        .lines()
-        .map(str::trim)
-        .find_map(|linea| linea.strip_prefix(&prefijo))
-        .map(|valor| valor.trim().to_string())
+    let mut dentro = false;
+
+    for linea in contenido.lines().map(str::trim) {
+        if linea.starts_with('[') {
+            dentro = linea == "[Settings]";
+            continue;
+        }
+        if dentro {
+            if let Some(valor) = linea.strip_prefix(&prefijo) {
+                return Some(valor.trim().to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Records the appearance for the next time a GTK application starts.
@@ -484,5 +503,25 @@ mod tests {
         let archivo = "[Settings]\ngtk-theme-name=Adwaita\ngtk-font-name=Cantarell 13\n";
         assert_eq!(valor_actual(archivo, "gtk-font-name"), Some("Cantarell 13".into()));
         assert_eq!(valor_actual(archivo, "gtk-icon-theme-name"), None);
+    }
+
+    #[test]
+    fn el_cuerpo_sale_de_settings_y_no_de_otra_seccion() {
+        // Una clave homónima en otra sección haría que se conservara un cuerpo
+        // que no es el que GTK está usando. `[Debug]` existe de verdad en estos
+        // archivos —hay otro test de este módulo que lo usa—.
+        let archivo = "[Debug]\ngtk-font-name=Otra 30\n\n[Settings]\ngtk-font-name=Cantarell 13\n";
+
+        assert_eq!(valor_actual(archivo, "gtk-font-name"), Some("Cantarell 13".into()));
+    }
+
+    #[test]
+    fn sin_seccion_settings_no_se_toma_nada() {
+        // Un archivo que sólo tiene otra sección no aporta cuerpo, y se cae en
+        // el que enviamos en lugar de heredar uno ajeno.
+        let archivo = "[Debug]\ngtk-font-name=Otra 30\n";
+
+        assert_eq!(valor_actual(archivo, "gtk-font-name"), None);
+        assert_eq!(con_familia("", "Noto Sans"), "Noto Sans 11");
     }
 }
