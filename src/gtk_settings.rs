@@ -30,14 +30,32 @@ pub const LIGHT_GTK_THEME: &str = "Adwaita";
 fn config_home() -> Option<PathBuf> {
     // GTK honours XDG_CONFIG_HOME when it looks for settings.ini, so writing to
     // a hardcoded ~/.config would land beside the file it actually reads.
-    if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME") {
-        let path = PathBuf::from(dir);
-        if !path.as_os_str().is_empty() {
-            return Some(path);
-        }
-    }
+    config_home_from(dirs::config_dir())
+}
 
-    home::home_dir().map(|home| home.join(".config"))
+/// The same decision without reading the environment.
+///
+/// Split out to be testable: the environment is process-wide and tests run in
+/// parallel, so one that sets a variable decides another one's outcome.
+///
+/// # Why the base has to be absolute
+///
+/// This used to take any non-empty `XDG_CONFIG_HOME`, so a **relative** value
+/// was accepted — and the spec says a relative value in these variables must be
+/// ignored, which is what GTK does when it goes looking for the same file.
+///
+/// That matters more here than the rule alone suggests. The point of this module
+/// is that the two stores must not disagree: with a relative value we would
+/// write `settings.ini` somewhere resolved against the process's working
+/// directory while GTK keeps reading the one under the home directory. The file
+/// would be written, nothing would fail, and the theme would simply not change.
+///
+/// `dirs::config_dir()` already applies the rule, and as one rule rather than
+/// two: an empty string is not an absolute path either, so both cases fall out
+/// of the same check. It only checks `HOME` for emptiness, so the filter below
+/// closes that other half.
+fn config_home_from(base: Option<PathBuf>) -> Option<PathBuf> {
+    base.filter(|base| base.is_absolute())
 }
 
 /// Rewrites `[Settings]` with `updates`, leaving the rest of the file as it was.
@@ -347,7 +365,8 @@ mod tests {
     /// GTK would ignore them there.
     #[test]
     fn missing_keys_are_added_inside_the_settings_section() {
-        let existing = "[Settings]\ngtk-font-name=Sans 10\n[Debug]\nenable-inspector-keybinding=true\n";
+        let existing =
+            "[Settings]\ngtk-font-name=Sans 10\n[Debug]\nenable-inspector-keybinding=true\n";
 
         let result = merged_settings(existing, UPDATES);
         let settings_block = result.split("[Debug]").next().unwrap();
@@ -417,8 +436,14 @@ mod tests {
             let written = std::fs::read_to_string(root.join(directory).join("settings.ini"))
                 .unwrap_or_else(|e| panic!("{directory}/settings.ini: {e}"));
 
-            assert!(written.contains("gtk-theme-name=Adwaita-dark"), "{directory}");
-            assert!(written.contains("gtk-icon-theme-name=VasakOS"), "{directory}");
+            assert!(
+                written.contains("gtk-theme-name=Adwaita-dark"),
+                "{directory}"
+            );
+            assert!(
+                written.contains("gtk-icon-theme-name=VasakOS"),
+                "{directory}"
+            );
             assert!(
                 written.contains("gtk-application-prefer-dark-theme=true"),
                 "{directory}"
@@ -458,7 +483,10 @@ mod tests {
             ("gtk-application-prefer-dark-theme", "false"),
         ];
 
-        let result = merged_settings("[Settings]\ngtk-application-prefer-dark-theme=true\n", updates);
+        let result = merged_settings(
+            "[Settings]\ngtk-application-prefer-dark-theme=true\n",
+            updates,
+        );
 
         assert!(result.contains("gtk-application-prefer-dark-theme=false"));
         assert!(!result.contains("prefer-dark-theme=true"));
@@ -475,13 +503,18 @@ mod tests {
     fn el_valor_con_coma_y_dos_espacios_tambien() {
         // Es el que veníamos enviando: «Noto Sans,  11». Partir por el último
         // espacio a secas dejaría el cuerpo pegado a una cadena vacía.
-        assert_eq!(con_familia("Noto Sans,  11", "MesloLGL Nerd Font Mono"),
-                   "MesloLGL Nerd Font Mono 11");
+        assert_eq!(
+            con_familia("Noto Sans,  11", "MesloLGL Nerd Font Mono"),
+            "MesloLGL Nerd Font Mono 11"
+        );
     }
 
     #[test]
     fn una_familia_de_varias_palabras_no_se_confunde_con_el_cuerpo() {
-        assert_eq!(con_familia("MesloLGL Nerd Font Mono 10", "Noto Sans"), "Noto Sans 10");
+        assert_eq!(
+            con_familia("MesloLGL Nerd Font Mono 10", "Noto Sans"),
+            "Noto Sans 10"
+        );
     }
 
     #[test]
@@ -501,7 +534,10 @@ mod tests {
     #[test]
     fn se_lee_el_valor_que_ya_estaba_en_el_archivo() {
         let archivo = "[Settings]\ngtk-theme-name=Adwaita\ngtk-font-name=Cantarell 13\n";
-        assert_eq!(valor_actual(archivo, "gtk-font-name"), Some("Cantarell 13".into()));
+        assert_eq!(
+            valor_actual(archivo, "gtk-font-name"),
+            Some("Cantarell 13".into())
+        );
         assert_eq!(valor_actual(archivo, "gtk-icon-theme-name"), None);
     }
 
@@ -512,7 +548,10 @@ mod tests {
         // archivos —hay otro test de este módulo que lo usa—.
         let archivo = "[Debug]\ngtk-font-name=Otra 30\n\n[Settings]\ngtk-font-name=Cantarell 13\n";
 
-        assert_eq!(valor_actual(archivo, "gtk-font-name"), Some("Cantarell 13".into()));
+        assert_eq!(
+            valor_actual(archivo, "gtk-font-name"),
+            Some("Cantarell 13".into())
+        );
     }
 
     #[test]
@@ -523,5 +562,37 @@ mod tests {
 
         assert_eq!(valor_actual(archivo, "gtk-font-name"), None);
         assert_eq!(con_familia("", "Noto Sans"), "Noto Sans 11");
+    }
+
+    #[test]
+    fn an_absolute_config_home_is_used() {
+        assert_eq!(
+            config_home_from(Some(PathBuf::from("/home/pato/.config"))),
+            Some(PathBuf::from("/home/pato/.config"))
+        );
+    }
+
+    #[test]
+    fn a_relative_config_home_is_refused() {
+        // Writing settings.ini to a path resolved against the working directory
+        // means GTK keeps reading the one under the home directory: the file is
+        // written, nothing fails, and the theme does not change — which is the
+        // exact disagreement this module exists to prevent.
+        //
+        // Empty, bare name, `./` and `../`: the bare name is the one that slips
+        // through when only the empty case is remembered, and it is the one this
+        // code used to accept.
+        for relative in ["", "config", "./config", "../config"] {
+            assert_eq!(
+                config_home_from(Some(PathBuf::from(relative))),
+                None,
+                "a base of {relative:?} must not be used"
+            );
+        }
+    }
+
+    #[test]
+    fn no_base_means_no_config_home() {
+        assert_eq!(config_home_from(None), None);
     }
 }
