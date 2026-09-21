@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-config-manager"
-version = "2.6.0"
+version = "2.6.1"
 authors = ["Joaquin (Pato) Decima <jdecima@vasak.net.ar>", "Vasak Group"]
 description = "A Tauri plugin for managing configuration for Vasak applications."
 edition = "2021"
@@ -17,6 +17,9 @@ default = ["system-theme-sync"]
 system-theme-sync = []
 
 [dependencies]
+# The XDG base directories: the rule that a relative or empty variable is
+# ignored lives there and not in a copy here. See `gtk_settings::config_home`.
+dirs = "6"
 tauri = { version = "2" }
 serde = "1"
 thiserror = "2"
