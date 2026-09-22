@@ -29,6 +29,26 @@ npm install @vasakgroup/plugin-config-manager
 bun add @vasakgroup/plugin-config-manager
 ```
 
+`vue`, `pinia` y `@tauri-apps/api` son dependencias **pares**: las pone la
+aplicación, no este paquete. Desde la 2.7.0 `pinia` se pide en `^4.0.0`.
+
+| Par | Rango |
+|---|---|
+| `vue` | `^3.5.35` |
+| `pinia` | `^4.0.0` |
+| `@tauri-apps/api` | `^2.11.0` |
+
+No es un detalle de empaquetado: la tienda que exporta `useConfigStore` vive en
+la `pinia` de la aplicación. Si el complemento se trajera la suya quedarían dos
+copias, y dos copias de `pinia` son dos tiendas activas —la aplicación arranca
+con «getActivePinia() was called but there was no active Pinia»—. Con `vue` es
+peor todavía: dos sistemas de reactividad, y el fallo sin mensaje claro.
+
+Una aplicación que todavía esté en `pinia` 3 **no se rompe** al tomar esta
+versión: como par, el complemento usa la copia que haya, así que sigue habiendo
+una sola y la tienda arranca igual. Se comprobó instalando el paquete en las dos.
+El rango dice contra qué está probado, y es adonde hay que ir.
+
 ### Backend Tauri
 
 ```toml

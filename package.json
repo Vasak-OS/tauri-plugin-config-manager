@@ -1,6 +1,6 @@
 {
   "name": "@vasakgroup/plugin-config-manager",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "author": "Joaquin (Pato) Decima <jdecima@vasak.net.ar>",
   "description": "A tauri plugin for managing configuration in a Vue 3 application using Pinia.",
   "type": "module",
@@ -21,17 +21,21 @@
     "prepublishOnly": "bun run build",
     "pretest": "bun run build"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@tauri-apps/api": "^2.11.0",
-    "pinia": "^3.0.4",
+    "pinia": "^4.0.0",
     "vue": "^3.5.35"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^12.3.0",
-    "@types/bun": "^1.4.0",
-    "rollup": "^4.61.1",
+    "@tauri-apps/api": "^2.11.1",
+    "@types/bun": "^1.4.2",
+    "@vue/devtools-api": "^8.2.1",
+    "pinia": "^4.0.3",
+    "rollup": "^4.63.4",
     "tslib": "^2.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vue": "^3.5.43"
   },
   "repository": {
     "url": "https://github.com/Vasak-OS/tauri-plugin-config-manager.git",
