@@ -79,6 +79,18 @@ impl<R: Runtime> ConfigManager<R> {
         Self::default_scheme_paths()
     }
 
+    /// Escribe el archivo pasando por uno temporal y un `rename`.
+    ///
+    /// Escribir encima del archivo de configuración deja una ventana en la que
+    /// se lo puede encontrar a medias si la máquina se apaga en el medio, y
+    /// entonces `leer_utilizable` se topa con un JSON que no parsea y la
+    /// interfaz se queda sin colores ni fuentes. El temporal se escribe y se
+    /// sincroniza antes de moverlo, y el `rename` —atómico dentro del mismo
+    /// directorio— deja el archivo viejo o el nuevo, nunca uno a medias.
+    ///
+    /// Los tres caminos de error borran el temporal por eso: si se lo deja
+    /// atrás, cada escritura posterior deja otro, y el directorio de
+    /// configuración se llena de archivos que nadie llega a mirar.
     async fn write_file_atomically(path: &std::path::Path, content: &str) -> crate::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -132,17 +144,19 @@ impl<R: Runtime> ConfigManager<R> {
 
         drop(tmp_file);
 
-        tokio::fs::rename(&tmp_path, path).await.map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            crate::Error::Io(std::io::Error::new(
+        if let Err(e) = tokio::fs::rename(&tmp_path, path).await {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err(crate::Error::Io(std::io::Error::new(
                 e.kind(),
                 format!(
                     "Failed to atomically replace config file {}: {}",
                     path.display(),
                     e
                 ),
-            ))
-        })
+            )));
+        }
+
+        Ok(())
     }
 
     pub fn new(app: AppHandle<R>) -> Self {
@@ -255,7 +269,8 @@ impl<R: Runtime> ConfigManager<R> {
         }
 
         let _write_guard = self.write_lock.lock().await;
-        self.leer_utilizable_con_el_cerrojo_tomado(&config_path).await
+        self.leer_utilizable_con_el_cerrojo_tomado(&config_path)
+            .await
     }
 
     /// Lo mismo, para quien **ya** tiene el cerrojo de escritura.
@@ -336,8 +351,7 @@ impl<R: Runtime> ConfigManager<R> {
         let config_path = self.config_path()?;
 
         // Validar semánticamente el payload antes de persistir.
-        let parsed_config: VSKConfig =
-            serde_json::from_str(config).map_err(crate::Error::Json)?;
+        let parsed_config: VSKConfig = serde_json::from_str(config).map_err(crate::Error::Json)?;
 
         let _write_guard = self.write_lock.lock().await;
 
@@ -455,9 +469,11 @@ impl<R: Runtime> ConfigManager<R> {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let detail = if stderr.is_empty() { stdout } else { stderr };
-            return Err(crate::Error::Io(std::io::Error::other(
-                format!("gsettings {} failed: {}", args.join(" "), detail),
-            )));
+            return Err(crate::Error::Io(std::io::Error::other(format!(
+                "gsettings {} failed: {}",
+                args.join(" "),
+                detail
+            ))));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -471,26 +487,18 @@ impl<R: Runtime> ConfigManager<R> {
     #[cfg(feature = "system-theme-sync")]
     fn try_sync_system_darkmode(darkmode: bool) {
         if !Self::has_gsettings_binary() {
-                tracing::warn!(
-                "gsettings not found; skipping system theme sync"
-            );
+            tracing::warn!("gsettings not found; skipping system theme sync");
             return;
         }
 
-        let current_scheme_raw = match Self::run_gsettings(&[
-            "get",
-            "org.gnome.desktop.interface",
-            "color-scheme",
-        ]) {
-            Ok(value) => value,
-            Err(e) => {
-                tracing::error!(
-                    "Could not read system color-scheme via gsettings: {}",
-                    e
-                );
-                return;
-            }
-        };
+        let current_scheme_raw =
+            match Self::run_gsettings(&["get", "org.gnome.desktop.interface", "color-scheme"]) {
+                Ok(value) => value,
+                Err(e) => {
+                    tracing::error!("Could not read system color-scheme via gsettings: {}", e);
+                    return;
+                }
+            };
 
         let current_scheme = current_scheme_raw
             .trim_matches('"')
@@ -504,10 +512,7 @@ impl<R: Runtime> ConfigManager<R> {
                 "color-scheme",
                 "prefer-dark",
             ]) {
-                tracing::error!(
-                    "Could not set GNOME color-scheme to prefer-dark: {}",
-                    e
-                );
+                tracing::error!("Could not set GNOME color-scheme to prefer-dark: {}", e);
                 return;
             }
 
@@ -517,10 +522,7 @@ impl<R: Runtime> ConfigManager<R> {
                 "gtk-theme",
                 crate::gtk_settings::DARK_GTK_THEME,
             ]) {
-                tracing::error!(
-                    "Could not set GNOME gtk-theme to Adwaita-dark: {}",
-                    e
-                );
+                tracing::error!("Could not set GNOME gtk-theme to Adwaita-dark: {}", e);
             }
         } else if !darkmode && current_scheme != "prefer-light" {
             if let Err(e) = Self::run_gsettings(&[
@@ -529,10 +531,7 @@ impl<R: Runtime> ConfigManager<R> {
                 "color-scheme",
                 "prefer-light",
             ]) {
-                tracing::error!(
-                    "Could not set GNOME color-scheme to prefer-light: {}",
-                    e
-                );
+                tracing::error!("Could not set GNOME color-scheme to prefer-light: {}", e);
                 return;
             }
 
@@ -542,10 +541,7 @@ impl<R: Runtime> ConfigManager<R> {
                 "gtk-theme",
                 crate::gtk_settings::LIGHT_GTK_THEME,
             ]) {
-                tracing::error!(
-                    "Could not set GNOME gtk-theme to Adwaita: {}",
-                    e
-                );
+                tracing::error!("Could not set GNOME gtk-theme to Adwaita: {}", e);
             }
         }
     }
@@ -598,12 +594,9 @@ impl<R: Runtime> ConfigManager<R> {
             if actual == deseado {
                 continue;
             }
-            if let Err(e) = Self::run_gsettings(&[
-                "set",
-                "org.gnome.desktop.interface",
-                clave,
-                &deseado,
-            ]) {
+            if let Err(e) =
+                Self::run_gsettings(&["set", "org.gnome.desktop.interface", clave, &deseado])
+            {
                 tracing::error!("Could not set GNOME {}: {}", clave, e);
             }
         }
@@ -636,11 +629,7 @@ impl<R: Runtime> ConfigManager<R> {
             "icon-theme",
             selected_pack,
         ]) {
-            tracing::error!(
-                "Could not set icon theme to '{}': {}",
-                selected_pack,
-                e
-            );
+            tracing::error!("Could not set icon theme to '{}': {}", selected_pack, e);
         }
     }
 
@@ -812,10 +801,7 @@ impl<R: Runtime> ConfigManager<R> {
                     }
                 }
             } else {
-                tracing::warn!(
-                    "Could not read schemes directory {}",
-                    path.display()
-                );
+                tracing::warn!("Could not read schemes directory {}", path.display());
             }
         }
 
@@ -891,7 +877,9 @@ mod pruebas_de_reposicion {
         // El caso real: un archivo cortado por un apagón o editado a mano. Antes
         // esto devolvía el texto tal cual, la interfaz se quedaba sin colores ni
         // fuentes, y no se recuperaba nunca porque nada lo reescribía.
-        assert!(!Manager::es_utilizable(r#"{"style":{"darkmode":true,"color-sch"#));
+        assert!(!Manager::es_utilizable(
+            r#"{"style":{"darkmode":true,"color-sch"#
+        ));
         assert!(!Manager::es_utilizable(""));
         assert!(!Manager::es_utilizable("no soy json"));
         // Y un tipo que no corresponde: `radius` es un número.
@@ -943,8 +931,14 @@ mod pruebas_de_reposicion {
         let normalizado = Manager::normalizar(sin_radio).expect("normaliza");
         let valor: serde_json::Value = serde_json::from_str(&normalizado).expect("parsea");
 
-        assert_eq!(valor["style"]["radius"], 8, "el radio de fábrica, ya escrito");
-        assert_eq!(valor["style"]["darkmode"], true, "y lo que sí estaba se respeta");
+        assert_eq!(
+            valor["style"]["radius"], 8,
+            "el radio de fábrica, ya escrito"
+        );
+        assert_eq!(
+            valor["style"]["darkmode"], true,
+            "y lo que sí estaba se respeta"
+        );
     }
 
     #[test]
@@ -971,7 +965,10 @@ mod pruebas_de_reposicion {
             valor["panel"]["posicion"], "abajo",
             "y cualquier otra sección que el modelo no conozca, también"
         );
-        assert_eq!(valor["style"]["radius"], 8, "sin dejar de completar lo que falta");
+        assert_eq!(
+            valor["style"]["radius"], 8,
+            "sin dejar de completar lo que falta"
+        );
     }
 
     #[test]
@@ -1022,7 +1019,8 @@ mod pruebas_de_reposicion {
 
     #[tokio::test]
     async fn reponer_aparta_el_roto_y_deja_uno_que_sirve() {
-        let base = std::env::temp_dir().join(format!("config-manager-prueba-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("config-manager-prueba-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).expect("directorio de prueba");
         let ruta = base.join("vasak.conf");
