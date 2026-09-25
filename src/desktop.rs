@@ -79,6 +79,18 @@ impl<R: Runtime> ConfigManager<R> {
         Self::default_scheme_paths()
     }
 
+    /// Escribe el archivo pasando por uno temporal y un `rename`.
+    ///
+    /// Escribir encima del archivo de configuración deja una ventana en la que
+    /// se lo puede encontrar a medias si la máquina se apaga en el medio, y
+    /// entonces `leer_utilizable` se topa con un JSON que no parsea y la
+    /// interfaz se queda sin colores ni fuentes. El temporal se escribe y se
+    /// sincroniza antes de moverlo, y el `rename` —atómico dentro del mismo
+    /// directorio— deja el archivo viejo o el nuevo, nunca uno a medias.
+    ///
+    /// Los tres caminos de error borran el temporal por eso: si se lo deja
+    /// atrás, cada escritura posterior deja otro, y el directorio de
+    /// configuración se llena de archivos que nadie llega a mirar.
     async fn write_file_atomically(path: &std::path::Path, content: &str) -> crate::Result<()> {
         use std::time::{SystemTime, UNIX_EPOCH};
 
