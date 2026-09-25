@@ -132,17 +132,19 @@ impl<R: Runtime> ConfigManager<R> {
 
         drop(tmp_file);
 
-        tokio::fs::rename(&tmp_path, path).await.map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            crate::Error::Io(std::io::Error::new(
+        if let Err(e) = tokio::fs::rename(&tmp_path, path).await {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err(crate::Error::Io(std::io::Error::new(
                 e.kind(),
                 format!(
                     "Failed to atomically replace config file {}: {}",
                     path.display(),
                     e
                 ),
-            ))
-        })
+            )));
+        }
+
+        Ok(())
     }
 
     pub fn new(app: AppHandle<R>) -> Self {
