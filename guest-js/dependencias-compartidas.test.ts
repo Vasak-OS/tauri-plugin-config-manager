@@ -92,10 +92,19 @@ describe('lo que el complemento importa', () => {
 		expect(importados.filter((paquete) => !(paquete in desarrollo))).toEqual([]);
 	});
 
-	test('y `pinia` se pide en la línea 4, que es la que comparte tienda', () => {
-		// El rango, nombrado. La 3 y la 4 no comparten nada: con la aplicación en
-		// una y esto en la otra vuelven las dos copias, que es todo el problema.
-		expect(manifiesto.peerDependencies?.pinia).toBe('^4.0.0');
+	test('y `pinia` se pide en la 3 y en la 4, para que alcance a toda aplicación', () => {
+		// La 3 y la 4 no comparten nada: con la aplicación en una y el rango del
+		// complemento en la otra, el instalador anida una segunda copia, que es
+		// todo el problema. Mientras el taller tenga aplicaciones en las dos, el
+		// rango tiene que admitir las dos. Con sólo `^4.0.0` —la 2.7 y la 2.8—
+		// las que están en la 3 quedaron fijas en `~2.6.1`.
+		const rango = manifiesto.peerDependencies?.pinia ?? '';
+
+		expect(Bun.semver.satisfies('3.0.4', rango)).toBe(true);
+		expect(Bun.semver.satisfies('4.0.3', rango)).toBe(true);
+		// Y no de más: la 2 es otra API, y una 5 no está probada.
+		expect(Bun.semver.satisfies('2.3.1', rango)).toBe(false);
+		expect(Bun.semver.satisfies('5.0.0', rango)).toBe(false);
 	});
 
 	test('y se comprueba: el lector distingue lo que se declara de lo que no', () => {

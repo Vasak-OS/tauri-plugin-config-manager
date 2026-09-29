@@ -30,12 +30,12 @@ bun add @vasakgroup/plugin-config-manager
 ```
 
 `vue`, `pinia` y `@tauri-apps/api` son dependencias **pares**: las pone la
-aplicación, no este paquete. Desde la 2.7.0 `pinia` se pide en `^4.0.0`.
+aplicación, no este paquete. Desde la 2.9.0 `pinia` se pide en `^3.0.4 || ^4.0.0`.
 
 | Par | Rango |
 |---|---|
 | `vue` | `^3.5.35` |
-| `pinia` | `^4.0.0` |
+| `pinia` | `^3.0.4 \|\| ^4.0.0` |
 | `@tauri-apps/api` | `^2.11.0` |
 
 No es un detalle de empaquetado: la tienda que exporta `useConfigStore` vive en
@@ -44,10 +44,13 @@ copias, y dos copias de `pinia` son dos tiendas activas —la aplicación arranc
 con «getActivePinia() was called but there was no active Pinia»—. Con `vue` es
 peor todavía: dos sistemas de reactividad, y el fallo sin mensaje claro.
 
-Una aplicación que todavía esté en `pinia` 3 **no se rompe** al tomar esta
-versión: como par, el complemento usa la copia que haya, así que sigue habiendo
-una sola y la tienda arranca igual. Se comprobó instalando el paquete en las dos.
-El rango dice contra qué está probado, y es adonde hay que ir.
+Las dos líneas de `pinia` entran en el rango porque el complemento no usa nada
+que las distinga: `defineStore` y el tipo `Store`, iguales en la 3 y en la 4. La
+2.7.0 y la 2.8.0 pedían sólo `^4.0.0`, y con eso las aplicaciones que siguen en
+`pinia` 3 no las podían instalar: quedaron fijas en `~2.6.1`, sin nada de lo que
+vino después. Con las dos en el rango, la par se resuelve con la copia que tenga
+la aplicación, sea cual sea, y sigue habiendo una sola. Se comprobó corriendo las
+pruebas y `tsc` con cada una.
 
 ### Backend Tauri
 
@@ -336,12 +339,19 @@ Cuando se usa `useConfigStore()`, el store inyecta automáticamente ~60 variable
 | UI (dark) | `--ui-background-dark`, `--ui-surface-dark`, `--ui-border-dark` | `#1e1e1e` |
 | Texto | `--text-main`, `--text-muted`, `--text-on-primary` | `#212121` |
 | Texto (dark) | `--text-main-dark`, `--text-muted-dark`, `--text-on-primary-dark` | `#e0e0e0` |
+| Texto sobre un fondo | `--text-on-primary`, `--text-on-secondary`, `--text-on-error` y sus `-dark` | `#eff1f5` |
 | Estado | `--status-error`, `--status-success`, `--status-warning` | `#ef5350` |
 | Estado (dark) | `--status-error-dark`, `--status-success-dark`, `--status-warning-dark` | `#ef9a9a` |
 | Terminal | `--terminal-foreground`, `--terminal-background`, `--terminal-cursor` | `#000000` |
 | Terminal (dark) | `--terminal-*-dark` | `#ffffff` |
 | Ansi (16 colores) | `--terminal-ansi-{color}` y `--terminal-ansi-{color}-dark` | `#000000`..`#ffffff` |
 | Radio | `--corner-radius` | `8px` |
+
+Las de texto sobre un fondo se **calculan**: se respeta la del esquema si llega a
+4.5:1 contra su fondo, si no se busca en la paleta del esquema y, en último caso,
+negro o blanco. `--text-on-error` va sobre `--status-error`, que es el rojo de la
+terminal del esquema (`ansi.red`), así que una aplicación no necesita fijar uno
+propio para sus botones de borrar.
 
 ## Arquitectura interna
 
