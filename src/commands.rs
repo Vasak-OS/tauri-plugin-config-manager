@@ -1,6 +1,6 @@
 use tauri::{command, AppHandle, Runtime};
 
-use crate::models::Scheme;
+use crate::models::{Scheme, SchemeData};
 use crate::ConfigManagerExt;
 use crate::Result;
 
@@ -26,6 +26,19 @@ pub async fn get_schemes<R: Runtime>(app: AppHandle<R>) -> Result<Vec<Scheme>> {
 }
 
 #[command]
-pub async fn get_scheme_by_id<R: Runtime>(app: AppHandle<R>, scheme_id: String) -> Result<Option<Scheme>> {
+pub async fn get_scheme_by_id<R: Runtime>(
+    app: AppHandle<R>,
+    scheme_id: String,
+) -> Result<Option<Scheme>> {
     app.config_manager().get_scheme_by_id(&scheme_id).await
+}
+
+/// Guarda un esquema en el directorio de esquemas del usuario.
+///
+/// Su permiso, `allow-save-user-scheme`, **no** está en el conjunto por
+/// defecto: escribir esquemas no es algo que toda aplicación deba poder, así
+/// que la que lo necesite lo declara en su capability.
+#[command]
+pub async fn save_user_scheme<R: Runtime>(app: AppHandle<R>, scheme: SchemeData) -> Result<Scheme> {
+    app.config_manager().save_user_scheme(scheme).await
 }

@@ -13,7 +13,7 @@ Plugin de Tauri para persistir, leer y observar configuración de aplicaciones V
 |---|---|
 | Persistencia atómica | Escritura vía archivo temporal + `rename` (fsync incluido) |
 | Cache con TTL | Cache dual (config + schemes) con TTL configurable de 30 min |
-| Watch de archivos | Detección de cambios externos vía `notify` con debounce de 250ms |
+| Watch de archivos | `vasak.conf` y el directorio de esquemas del usuario, vía `notify`, con debounce de 250ms al final de la ráfaga |
 | Temas visuales | Esquemas de color con paletas UI, terminal y ansi (dark/light) |
 | Sincronización GNOME | `gsettings` para tema, iconos y color-scheme (feature flag) |
 | Evento en tiempo real | `config-changed` emitido a todo frontend conectado |
@@ -121,6 +121,34 @@ if (scheme) {
 }
 ```
 
+### `saveUserScheme(scheme: SchemeData): Promise<Scheme>`
+
+Guarda un esquema en el directorio de esquemas **del usuario** como `<id>.json`
+y devuelve `{ path, scheme }`. Es el mismo JSON que hay dentro de un archivo de
+esquema.
+
+- El directorio del usuario es **el primero** de las rutas de esquemas: sin
+  `VASAK_SCHEMES_PATHS`, `~/.config/vasak/schemes`; con la variable, su primera
+  entrada no vacía. Es también el que gana al buscar por id, así que un esquema
+  guardado con el id de uno del sistema lo tapa sin tocarlo. Si esa primera
+  ruta cae dentro de `/usr`, se rechaza: nunca se escribe en
+  `/usr/share/schemes`.
+- El `id` tiene que cumplir `^[a-z0-9][a-z0-9-]{0,63}$` (es el nombre del
+  archivo); si no, error.
+- Crea el directorio si falta, escribe de forma atómica (temporal oculto en el
+  mismo directorio + `rename`) e invalida el caché de esquemas.
+- No emite `config-changed` por su cuenta: lo emite el vigilante de cada
+  aplicación al ver el archivo, incluida la que guardó.
+- Necesita `config-manager:allow-save-user-scheme`, que **no** está en el
+  conjunto por defecto (ver [Permisos Tauri](#permisos-tauri)).
+
+```ts
+const { path } = await saveUserScheme({ ...scheme.scheme, id: "custom", name: "Personalizado" });
+```
+
+Lo que el archivo tenga y el modelo no declare —un campo nuevo en cualquier
+nivel— se conserva: leer un esquema y volver a guardarlo no pierde nada.
+
 ### `useConfigStore()`
 
 Store de Pinia que carga config, aplica dark mode class al `<html>` e inyecta todas las variables CSS del esquema activo.
@@ -182,7 +210,7 @@ export type ThemeVariant = {
 
 export type UiColors = {
   color: { primary: string; secondary: string };
-  text: { main: string; muted: string; "on-primary": string };
+  text: { main: string; muted: string; "on-primary": string; "on-secondary"?: string };
   background: string;
   border: string;
   surface: string;
@@ -331,7 +359,7 @@ flowchart LR
         E[cache RwLock<br/>TTL 30min]
         F[write atómico<br/>tmp + fsync + rename]
         G[gsettings sync<br/>system-theme-sync]
-        H[notify::Watcher<br/>debounce 250ms]
+        H[notify::Watcher<br/>vasak.conf + esquemas del usuario<br/>debounce 250ms]
     end
 
     A -->|invoke| B
@@ -349,7 +377,7 @@ flowchart LR
 
 - **Cache**: TTL de 30 minutos, `RwLock` para lecturas concurrentes sin bloqueo entre sí. Se invalida automáticamente al expirar o al escribir.
 - **Escritura atómica**: `write()` → `fsync()` → `rename()`. Previene corrupción ante cortes de energía.
-- **Watch**: Usa `notify` recommended watcher (inotify en Linux). Debounce de 250ms para evitar reaccionar a escrituras rápidas en ráfaga.
+- **Watch**: Usa `notify` recommended watcher (inotify en Linux) sobre el directorio de `vasak.conf` y sobre el de esquemas del usuario (que se crea si falta, para poder vigilarlo). Un cambio en `vasak.conf` relee el caché; crear, modificar, borrar o renombrar un `*.json` en el de esquemas vacía el caché de esquemas. Los dos terminan en el mismo `config-changed`. Se ignoran los archivos ocultos, que es como se llaman los temporales de la escritura atómica. El debounce de 250ms es **al final** de la ráfaga y compartido: una ráfaga de guardados sale como un solo evento y siempre con el último estado.
 - **Schemes cache**: Misma estrategia TTL, ideal porque los esquemas rara vez cambian en disco.
 
 ## Variables de entorno
@@ -357,7 +385,7 @@ flowchart LR
 | Variable | Efecto |
 |---|---|
 | `VASAK_CONFIG_PATH` | Ruta absoluta al archivo de configuración. Default: `~/.config/vasak/vasak.conf` |
-| `VASAK_SCHEMES_PATHS` | Paths separados por `:` para buscar esquemas. Default: `~/.config/vasak/schemes` y `/usr/share/schemes` |
+| `VASAK_SCHEMES_PATHS` | Paths separados por `:` para buscar esquemas, en orden de prioridad. Default: `~/.config/vasak/schemes` y `/usr/share/schemes`. El primero es el «del usuario»: ahí escribe `saveUserScheme` y ése es el que se vigila |
 
 ## Feature flags
 
@@ -376,21 +404,32 @@ Cuando `system-theme-sync` está habilitado:
 
 ## Permisos Tauri
 
-El plugin define 5 comandos, todos habilitados por defecto:
+El plugin define 6 comandos. Los cinco primeros están en el conjunto por defecto
+(`config-manager:default`); `save_user_scheme` no:
 
-| Permiso | Comando |
-|---|---|
-| `allow-read-config` | `read_config` |
-| `allow-write-config` | `write_config` |
-| `allow-set-darkmode` | `set_darkmode` |
-| `allow-get-schemes` | `get_schemes` |
-| `allow-get-scheme-by-id` | `get_scheme_by_id` |
+| Permiso | Comando | Por defecto |
+|---|---|---|
+| `allow-read-config` | `read_config` | sí |
+| `allow-write-config` | `write_config` | sí |
+| `allow-set-darkmode` | `set_darkmode` | sí |
+| `allow-get-schemes` | `get_schemes` | sí |
+| `allow-get-scheme-by-id` | `get_scheme_by_id` | sí |
+| `allow-save-user-scheme` | `save_user_scheme` | **no** |
+
+Escribir esquemas no es algo que toda aplicación deba poder: la que lo necesite
+lo declara en su capability.
+
+```json
+{
+  "permissions": ["config-manager:default", "config-manager:allow-save-user-scheme"]
+}
+```
 
 ## Eventos
 
 | Evento | Cuándo se emite | Payload |
 |---|---|---|
-| `config-changed` | Archivo modificado externamente o via `writeConfig()` / `setDarkMode()` | `()` |
+| `config-changed` | `vasak.conf` modificado externamente o vía `writeConfig()` / `setDarkMode()`, o un `*.json` creado, modificado, borrado o renombrado en el directorio de esquemas del usuario (incluido por `saveUserScheme()`) | `()` |
 
 Escuchar desde el frontend:
 
