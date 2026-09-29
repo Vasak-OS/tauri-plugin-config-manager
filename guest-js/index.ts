@@ -35,6 +35,25 @@ export async function getSchemeById(schemeId: string): Promise<Scheme | null> {
 }
 
 /**
+ * Guarda un esquema en el directorio de esquemas del usuario, como `<id>.json`.
+ *
+ * El directorio es el primero de `VASAK_SCHEMES_PATHS`, o
+ * `~/.config/vasak/schemes` sin la variable; nunca `/usr/share/schemes`. El
+ * `id` tiene que cumplir `^[a-z0-9][a-z0-9-]{0,63}$`, porque es también el
+ * nombre del archivo: si no, se rechaza.
+ *
+ * No emite `config-changed` por su cuenta: lo emite el vigilante de cada
+ * aplicación al ver el archivo, así que las demás lo reaplican solas.
+ *
+ * Necesita el permiso `config-manager:allow-save-user-scheme`, que **no** está
+ * en el conjunto por defecto: la aplicación que guarde esquemas lo declara en
+ * su capability.
+ */
+export async function saveUserScheme(scheme: SchemeData): Promise<Scheme> {
+  return await invoke<Scheme>("plugin:config-manager|save_user_scheme", { scheme });
+}
+
+/**
  * Contraste, para que el texto sobre los colores de marca se pueda leer.
  *
  * El esquema trae `on-primary` como un valor fijo, y eso funciona sólo mientras el
@@ -316,6 +335,8 @@ export type TextColors = {
   main: string;
   muted: string;
   "on-primary": string;
+  /** El texto sobre el color secundario. Los esquemas anteriores no lo traen. */
+  "on-secondary"?: string;
 };
 
 export type TerminalColors = {

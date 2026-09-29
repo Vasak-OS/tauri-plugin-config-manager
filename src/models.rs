@@ -61,12 +61,12 @@ pub struct Icons {
 pub struct Desktop {
     #[serde(default)]
     pub wallpaper: Vec<String>,
-    #[serde(default = "tamano_de_icono_por_defecto")]
+    #[serde(default = "default_icon_size")]
     pub iconsize: u32,
     /// Con su propio valor de fábrica: `#[serde(default)]` daría `false` para un
     /// `bool`, así que a un archivo al que le faltara esta clave se le
     /// esconderían los archivos del escritorio sin que nadie lo pidiera.
-    #[serde(default = "mostrar_archivos_por_defecto")]
+    #[serde(default = "default_show_files")]
     pub showfiles: bool,
     #[serde(default)]
     pub showhiddenfiles: bool,
@@ -76,11 +76,11 @@ pub struct Desktop {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-fn tamano_de_icono_por_defecto() -> u32 {
+fn default_icon_size() -> u32 {
     48
 }
 
-fn mostrar_archivos_por_defecto() -> bool {
+fn default_show_files() -> bool {
     true
 }
 
@@ -91,9 +91,9 @@ fn mostrar_archivos_por_defecto() -> bool {
 pub struct Style {
     #[serde(default)]
     pub darkmode: bool,
-    #[serde(rename = "color-scheme", default = "esquema_por_defecto")]
+    #[serde(rename = "color-scheme", default = "default_color_scheme")]
     pub color_scheme: String,
-    #[serde(default = "radio_por_defecto")]
+    #[serde(default = "default_radius")]
     pub radius: u32,
     /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
     /// Ver [`VSKConfig::extra`].
@@ -101,12 +101,12 @@ pub struct Style {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-fn esquema_por_defecto() -> String {
+fn default_color_scheme() -> String {
     "vasak-default".to_string()
 }
 
 /// En píxeles. El mismo que usa `rounded-corner` en todo el escritorio.
-fn radio_por_defecto() -> u32 {
+fn default_radius() -> u32 {
     8
 }
 
@@ -114,8 +114,8 @@ impl Default for Style {
     fn default() -> Self {
         Self {
             darkmode: false,
-            color_scheme: esquema_por_defecto(),
-            radius: radio_por_defecto(),
+            color_scheme: default_color_scheme(),
+            radius: default_radius(),
             extra: serde_json::Map::new(),
         }
     }
@@ -127,6 +127,12 @@ pub struct Scheme {
     pub scheme: SchemeData,
 }
 
+/// Un esquema de color tal como está en su archivo JSON.
+///
+/// Desde que los esquemas se pueden **guardar** (`save_user_scheme`), este
+/// modelo no es sólo de lectura: lo que entra por acá es lo que vuelve al disco.
+/// Por eso cada struct del esquema lleva su `extra`, y `text.on-secondary` está
+/// declarado.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SchemeData {
     pub id: String,
@@ -135,18 +141,35 @@ pub struct SchemeData {
     pub description: String,
     pub version: String,
     pub colors: SchemeColors,
+    /// Todo lo que el archivo tenga y el modelo no conozca, tal como está.
+    ///
+    /// Sin esto, leer un esquema y volver a guardarlo borraba en silencio
+    /// cualquier campo que el modelo no declarara: le pasaba ya a
+    /// `text.on-secondary`, que `vasak-default.json` trae desde antes de que
+    /// existiera acá, y le pasaría a cualquier campo que se sume mañana. Es el
+    /// mismo criterio que [`VSKConfig::extra`] para `vasak.conf`.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SchemeColors {
     pub dark: ThemeVariant,
     pub light: ThemeVariant,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ThemeVariant {
     pub ui: UiColors,
     pub terminal: TerminalColors,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -156,12 +179,20 @@ pub struct UiColors {
     pub background: String,
     pub border: String,
     pub surface: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ColorPalette {
     pub primary: String,
     pub secondary: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -170,6 +201,18 @@ pub struct TextColors {
     pub muted: String,
     #[serde(rename = "on-primary")]
     pub on_primary: String,
+    /// El texto sobre el color secundario. Opcional porque los esquemas
+    /// anteriores no lo traen; cuando falta, no se escribe.
+    #[serde(
+        rename = "on-secondary",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub on_secondary: Option<String>,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -178,6 +221,10 @@ pub struct TerminalColors {
     pub background: String,
     pub cursor: String,
     pub ansi: AnsiColors,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -206,4 +253,8 @@ pub struct AnsiColors {
     pub bright_cyan: String,
     #[serde(rename = "brightWhite")]
     pub bright_white: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la ida y vuelta.
+    /// Ver [`SchemeData::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }

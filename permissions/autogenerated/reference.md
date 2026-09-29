@@ -100,6 +100,32 @@ Denies the read_config command without any pre-configured scope.
 <tr>
 <td>
 
+`config-manager:allow-save-user-scheme`
+
+</td>
+<td>
+
+Enables the save_user_scheme command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`config-manager:deny-save-user-scheme`
+
+</td>
+<td>
+
+Denies the save_user_scheme command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `config-manager:allow-set-darkmode`
 
 </td>
