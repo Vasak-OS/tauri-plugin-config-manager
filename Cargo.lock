@@ -3163,7 +3163,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-config-manager"
-version = "2.8.0"
+version = "2.9.0"
 dependencies = [
  "dirs",
  "home",

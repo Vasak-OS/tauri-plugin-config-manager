@@ -497,6 +497,14 @@ const definirConfigStore = () =>
               `--text-on-secondary${sufijo}`,
               textoSobre(ui.color.secondary, undefined, ui),
             );
+            // Lo mismo para el error, que es un fondo más: los botones que
+            // borran van en `bg-status-error`. Su color sale del rojo de la
+            // terminal, que en un tema claro suele ser oscuro y en uno oscuro
+            // un rosado claro, así que el texto tampoco puede ser uno solo.
+            document.documentElement.style.setProperty(
+              `--text-on-error${sufijo}`,
+              textoSobre(variante.terminal.ansi.red, undefined, ui),
+            );
 
             const borde = bordeFuerteSobre(ui);
             if (borde) {
