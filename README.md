@@ -161,6 +161,40 @@ const configStore = useConfigStore();
 await configStore.loadConfig();
 ```
 
+Después de la primera carga pone la clase `scheme-transition` en `<html>` (dos cuadros
+después, para no fundir desde los colores de fábrica al abrir). Con vue-libvasak ≥ 2.10,
+cada cambio de esquema siguiente se funde en 300 ms.
+
+### Colores desde el fondo de pantalla (2.10.0)
+
+«Seguir al fondo» del esquema `custom`: la paleta del fondo y los colores de interfaz con
+el contraste garantizado (4,5:1 texto, 3:1 acentos, en las dos variantes). Los colores
+fijados a mano, el fondo de origen y el interruptor viven en `custom.json`, clave
+`wallpaper-colors`.
+
+```ts
+import { followWallpaper, getSchemeById, readConfig, saveUserScheme } from "@vasakgroup/plugin-config-manager";
+
+// En cada `config-changed` (lo hace vasak-desktop):
+const outcome = await followWallpaper({
+  readConfig,
+  loadScheme: async (id) => (await getSchemeById(id))?.scheme ?? null,
+  readPixels: (path) => invoke("wallpaper_pixels", { path }), // RGB crudo de la app
+  save: saveUserScheme,
+});
+// "applied" | "off" | "unchanged" | "not-custom" | "unreadable" | …
+```
+
+Las piezas sueltas: `extractPalette(pixels)`, `buildWallpaperPatches(scheme, palette, pinned)`,
+`applyWallpaperColors(scheme, palette, source)`, `ensureContrast(color, fondos, mínimo)`,
+`applyColorPatch(scheme, variante, cambio)`, `readWallpaperState` / `withWallpaperState`.
+
+### Contraste
+
+`contrastRatio(a, b)`, `luminance(hex)`, `textOn(fondo, preferido, paleta)`,
+`strongBorderOn(paleta)`, `bestOn(fondo, candidatos, mínimo)`, `MIN_TEXT_CONTRAST`,
+`MIN_NON_TEXT_CONTRAST`. Los nombres de antes (`contraste`, `textoSobre`…) siguen como alias.
+
 ## Tipos
 
 ```ts
