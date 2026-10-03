@@ -135,6 +135,10 @@ function seeds(buckets: Bucket[], k: number): Oklab[] {
  */
 export function extractPalette(pixels: WallpaperPixels, size = PALETTE_SIZE): PaletteColor[] {
   if (pixels.width <= 0 || pixels.height <= 0) return [];
+  // Una muestra más corta que lo que dice medir es un fondo que no se leyó
+  // entero: sacar colores de una parte, con las posiciones calculadas sobre el
+  // tamaño declarado, daría una paleta falsa. Mejor ninguna.
+  if (pixels.data.length < pixels.width * pixels.height * 3) return [];
   const buckets = bucketize(pixels);
   if (buckets.length === 0) return [];
   const total = buckets.reduce((sum, bucket) => sum + bucket.count, 0);

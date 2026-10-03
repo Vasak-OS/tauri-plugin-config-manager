@@ -63,6 +63,7 @@ function harness(scheme: SchemeData | null, wallpaper: string, colorScheme = "cu
     readPixels: async (path) => {
       read.push(path);
       if (path.includes("roto")) throw new Error("no decodifica");
+      if (path.includes("cortado")) return { ...solid(30, 120, 110), height: 540 };
       return path.includes("rojo") ? solid(190, 30, 40) : solid(30, 120, 110);
     },
     save: async (next) => {
@@ -124,6 +125,12 @@ describe("followWallpaper", () => {
 
   test("un fondo que no se puede leer no escribe nada", async () => {
     const h = harness(custom(true), "/f/roto.mp4");
+    expect(await followWallpaper(h.deps)).toBe("unreadable");
+    expect(h.saved).toHaveLength(0);
+  });
+
+  test("una muestra cortada cuenta como ilegible y no escribe nada", async () => {
+    const h = harness(custom(true), "/f/cortado.jpg");
     expect(await followWallpaper(h.deps)).toBe("unreadable");
     expect(h.saved).toHaveLength(0);
   });

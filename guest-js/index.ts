@@ -1,15 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import {
-  bestOn,
-  contrastRatio,
-  luminance,
-  MIN_NON_TEXT_CONTRAST,
-  MIN_TEXT_CONTRAST,
-  strongBorderOn,
-  textOn,
-} from "./contrast";
+import { strongBorderOn, textOn } from "./contrast";
 
 export * from "./color-space";
 export * from "./scheme-patch";
@@ -105,20 +97,15 @@ export {
  * inglés de `contrast.ts`. Se quitan cuando ningún consumidor los use (en una
  * minor: los plugins no pasan a la 3.x).
  */
-/** @deprecated Usar `MIN_TEXT_CONTRAST`. */
-export const MINIMO_TEXTO = MIN_TEXT_CONTRAST;
-/** @deprecated Usar `MIN_NON_TEXT_CONTRAST`. */
-export const MINIMO_NO_TEXTO = MIN_NON_TEXT_CONTRAST;
-/** @deprecated Usar `luminance`. */
-export const luminancia = luminance;
-/** @deprecated Usar `contrastRatio`. */
-export const contraste = contrastRatio;
-/** @deprecated Usar `bestOn`. */
-export const mejorSobre = bestOn;
-/** @deprecated Usar `textOn`. */
-export const textoSobre = textOn;
-/** @deprecated Usar `strongBorderOn`. */
-export const bordeFuerteSobre = strongBorderOn;
+export {
+  strongBorderOn as bordeFuerteSobre,
+  contrastRatio as contraste,
+  luminance as luminancia,
+  bestOn as mejorSobre,
+  MIN_NON_TEXT_CONTRAST as MINIMO_NO_TEXTO,
+  MIN_TEXT_CONTRAST as MINIMO_TEXTO,
+  textOn as textoSobre,
+} from "./contrast";
 
 /**
  * Para qué se usa una fuente. Determina en qué genérica termina la pila.

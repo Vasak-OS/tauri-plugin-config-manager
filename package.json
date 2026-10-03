@@ -19,7 +19,8 @@
   "scripts": {
     "build": "rollup -c",
     "prepublishOnly": "bun run build",
-    "pretest": "bun run build"
+    "pretest": "bun run build",
+    "test": "bun test"
   },
   "peerDependencies": {
     "@tauri-apps/api": "^2.11.0",

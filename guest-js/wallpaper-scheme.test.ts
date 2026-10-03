@@ -136,6 +136,11 @@ describe('la paleta del fondo', () => {
 		expect(green?.y).toBeCloseTo(0.5, 1);
 	});
 
+	test('una muestra más corta que su tamaño declarado no da paleta', () => {
+		const pixels = image(WALLPAPERS.forest as Painter);
+		expect(extractPalette({ ...pixels, data: Array.from(pixels.data).slice(0, 96 * 3 * 10) })).toEqual([]);
+	});
+
 	test('una imagen vacía da una paleta vacía, y entonces no se cambia nada', () => {
 		expect(extractPalette({ width: 0, height: 0, data: [] })).toEqual([]);
 		expect(buildWallpaperPatches(baseScheme(), [])).toBeNull();

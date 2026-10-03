@@ -38,7 +38,7 @@ export function luminance(hex: string): number | null {
   if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
 
   const channel = (i: number) => {
-    const v = parseInt(full.slice(i, i + 2), 16) / 255;
+    const v = Number.parseInt(full.slice(i, i + 2), 16) / 255;
     return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
   };
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
