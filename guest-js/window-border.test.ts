@@ -46,6 +46,33 @@ describe('windowBorderProperties', () => {
 		expect(windowBorderProperties({ width: 'thick', color: 'scheme' }).width).toBe('2px');
 	});
 
+	test('muy grueso son 3 px', () => {
+		expect(windowBorderProperties({ width: 'heavy', color: 'scheme' }).width).toBe('3px');
+	});
+
+	test('cada grosor es más ancho que el anterior', () => {
+		const px = (width: string) =>
+			Number.parseInt(windowBorderProperties({ width, color: 'scheme' }).width, 10);
+		expect(px('normal')).toBeLessThan(px('thick'));
+		expect(px('thick')).toBeLessThan(px('heavy'));
+	});
+
+	test('una clave heredada de Object no rompe ni deja la ventana sin borde', () => {
+		// Un `vasak.conf` escrito a mano con `"width": "toString"` no puede
+		// devolver una función ni `undefined` como grosor: cae en el de siempre.
+		for (const heredada of [
+			'toString',
+			'constructor',
+			'__proto__',
+			'hasOwnProperty',
+			'valueOf',
+		]) {
+			const { width } = windowBorderProperties({ width: heredada, color: 'scheme' });
+			expect(typeof width).toBe('string');
+			expect(width).toBe('1px');
+		}
+	});
+
 	test('el de acento sigue al primario del esquema y no a un color resuelto', () => {
 		// Como referencia a la variable sigue al modo oscuro sin reescribirse.
 		expect(windowBorderProperties({ width: 'normal', color: 'accent' }).color).toBe(
@@ -136,6 +163,14 @@ describe('el store aplica el borde de afuera', () => {
 
 		expect(written.get('--window-border-width')).toBe('2px');
 		expect(written.get('--ui-window-border')).toBe('var(--use-primary)');
+	});
+
+	test('muy grueso escribe 3 px en :root', async () => {
+		border = { width: 'heavy', color: 'scheme' };
+		await useConfigStore().loadConfig();
+
+		expect(written.get('--window-border-width')).toBe('3px');
+		expect(written.has('--ui-window-border')).toBe(false);
 	});
 
 	test('un archivo sin la clave deja el borde fino y quita el color propio', async () => {

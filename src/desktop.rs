@@ -1588,6 +1588,23 @@ mod pruebas_del_borde {
     }
 
     #[test]
+    fn el_grosor_muy_grueso_se_conserva_al_normalizar() {
+        // `heavy` es un valor que conoce la interfaz: el archivo no se aparta y
+        // la interfaz lo recibe tal cual, con el color completado.
+        let muy_grueso = r#"{"style":{"border":{"width":"heavy"}}}"#;
+        assert!(Manager::is_usable(muy_grueso));
+
+        let valor = normalized(muy_grueso);
+        assert_eq!(valor["style"]["border"]["width"], "heavy");
+        assert_eq!(valor["style"]["border"]["color"], "scheme");
+        assert_eq!(
+            normalized(&valor.to_string()),
+            valor,
+            "estable en la segunda vuelta"
+        );
+    }
+
+    #[test]
     fn el_contenido_de_fabrica_trae_el_borde_de_siempre() {
         let contenido = Manager::default_content().expect("se serializa");
         let valor: serde_json::Value = serde_json::from_str(&contenido).expect("parsea");

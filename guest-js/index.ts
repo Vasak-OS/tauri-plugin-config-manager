@@ -207,8 +207,18 @@ export function pilaDeFuente(
   return `'${limpio}', ${generica}`;
 }
 
-/** El grosor del borde de afuera: `normal` es 1 px y `thick`, 2 px. */
-export type WindowBorderWidth = "normal" | "thick";
+/**
+ * El grosor del borde de afuera: `normal` es 1 px, `thick` 2 px y `heavy`
+ * 3 px.
+ */
+export type WindowBorderWidth = "normal" | "thick" | "heavy";
+
+/** Los píxeles de cada grosor. */
+const WINDOW_BORDER_PIXELS: Record<WindowBorderWidth, string> = {
+  normal: "1px",
+  thick: "2px",
+  heavy: "3px",
+};
 
 /**
  * El color del borde de afuera: `scheme` es el canto translúcido de siempre
@@ -247,7 +257,11 @@ export function windowBorderProperties(
   border: Partial<WindowBorder> | null | undefined,
 ): WindowBorderProperties {
   return {
-    width: border?.width === "thick" ? "2px" : "1px",
+    width:
+      border?.width !== undefined &&
+      Object.prototype.hasOwnProperty.call(WINDOW_BORDER_PIXELS, border.width)
+        ? WINDOW_BORDER_PIXELS[border.width]
+        : WINDOW_BORDER_PIXELS.normal,
     color: border?.color === "accent" ? "var(--use-primary)" : null,
   };
 }

@@ -138,7 +138,7 @@ impl Default for Style {
 /// `guest-js`) trata lo desconocido como el valor de fábrica.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Border {
-    /// `normal` (1 px) o `thick` (2 px).
+    /// `normal` (1 px), `thick` (2 px) o `heavy` (3 px).
     #[serde(default = "default_border_width")]
     pub width: String,
     /// `scheme` (el canto translúcido del esquema) o `accent` (el primario).

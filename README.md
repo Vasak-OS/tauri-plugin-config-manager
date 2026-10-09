@@ -203,7 +203,7 @@ export type VSKConfig = {
     darkmode: boolean;
     "color-scheme": string;
     radius: number;
-    border?: { width: "normal" | "thick"; color: "scheme" | "accent" };
+    border?: { width: "normal" | "thick" | "heavy"; color: "scheme" | "accent" };
   };
   desktop: {
     wallpaper: string[];
@@ -381,7 +381,7 @@ Cuando se usa `useConfigStore()`, el store inyecta automáticamente ~60 variable
 | Terminal (dark) | `--terminal-*-dark` | `#ffffff` |
 | Ansi (16 colores) | `--terminal-ansi-{color}` y `--terminal-ansi-{color}-dark` | `#000000`..`#ffffff` |
 | Radio | `--corner-radius` | `8px` |
-| Borde de afuera, grosor | `--window-border-width` (de `style.border.width`) | `1px` |
+| Borde de afuera, grosor | `--window-border-width` (de `style.border.width`: `normal` 1 px, `thick` 2 px, `heavy` 3 px) | `1px` |
 | Borde de afuera, color | `--ui-window-border` (`var(--use-primary)` con `style.border.color: "accent"`; sin la variable, el del esquema) | — |
 
 El borde de afuera es el de la ventana entera, el panel, el centro de control y
