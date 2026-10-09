@@ -1511,3 +1511,106 @@ mod scheme_tests {
         assert!(manager.schemes_cache.read().await.is_none());
     }
 }
+
+#[cfg(test)]
+mod pruebas_del_borde {
+    //! `style.border`: el borde de afuera de las ventanas, el panel y los
+    //! emergentes del escritorio.
+    //!
+    //! Las pruebas miran el JSON que sale de `normalize` —lo que recibe la
+    //! interfaz por `read_config`— y no los campos del modelo: lo que importa es
+    //! qué ve quien lee la configuración, no cómo se guarda adentro.
+    use super::*;
+    use tauri::test::MockRuntime;
+
+    type Manager = ConfigManager<MockRuntime>;
+
+    fn normalized(content: &str) -> serde_json::Value {
+        let text = Manager::normalize(content).expect("normaliza");
+        serde_json::from_str(&text).expect("parsea")
+    }
+
+    #[test]
+    fn un_archivo_sin_borde_sigue_sirviendo_y_recibe_el_de_siempre() {
+        // Todos los `vasak.conf` que hay hoy son anteriores a la clave: no
+        // pueden apartarse por eso, y la interfaz tiene que verla completa.
+        let sin_borde = r#"{"style":{"darkmode":true,"color-scheme":"vasak-default","radius":8}}"#;
+        assert!(Manager::is_usable(sin_borde));
+
+        let valor = normalized(sin_borde);
+        assert_eq!(
+            valor["style"]["border"],
+            serde_json::json!({ "width": "normal", "color": "scheme" }),
+            "el borde de fábrica, ya escrito"
+        );
+        assert_eq!(valor["style"]["darkmode"], true, "lo demás se respeta");
+    }
+
+    #[test]
+    fn el_borde_elegido_sobrevive_ida_y_vuelta_con_lo_que_no_se_conoce() {
+        // Una clave de una versión futura dentro de `border` no puede perderse
+        // al reescribir el archivo; y a un borde a medias se le completa lo que
+        // falta sin tocar lo elegido.
+        let con_borde = r#"{"style":{"border":{"width":"thick","glow":{"blur":4}}}}"#;
+        let valor = normalized(con_borde);
+
+        assert_eq!(valor["style"]["border"]["width"], "thick", "lo elegido");
+        assert_eq!(
+            valor["style"]["border"]["color"], "scheme",
+            "lo que faltaba, de fábrica"
+        );
+        assert_eq!(
+            valor["style"]["border"]["glow"],
+            serde_json::json!({ "blur": 4 }),
+            "lo desconocido sobrevive"
+        );
+
+        // Y una segunda vuelta no cambia nada.
+        assert_eq!(normalized(&valor.to_string()), valor);
+    }
+
+    #[test]
+    fn un_valor_desconocido_no_hace_ilegible_el_archivo() {
+        // El archivo que no parsea se aparta y se repone de fábrica: una errata
+        // en el borde no puede costar el fondo, los widgets y las fuentes.
+        let con_errata = r#"{"style":{"border":{"width":"huge"}},
+            "desktop":{"wallpaper":["/un/fondo.jpg"],"iconsize":36,
+                       "showfiles":true,"showhiddenfiles":false}}"#;
+        assert!(Manager::is_usable(con_errata));
+
+        let valor = normalized(con_errata);
+        assert_eq!(
+            valor["style"]["border"]["width"], "huge",
+            "se conserva tal cual; quien lo aplica lo trata como el de fábrica"
+        );
+        assert_eq!(valor["style"]["border"]["color"], "scheme");
+        assert_eq!(valor["desktop"]["wallpaper"][0], "/un/fondo.jpg");
+    }
+
+    #[test]
+    fn el_grosor_muy_grueso_se_conserva_al_normalizar() {
+        // `heavy` es un valor que conoce la interfaz: el archivo no se aparta y
+        // la interfaz lo recibe tal cual, con el color completado.
+        let muy_grueso = r#"{"style":{"border":{"width":"heavy"}}}"#;
+        assert!(Manager::is_usable(muy_grueso));
+
+        let valor = normalized(muy_grueso);
+        assert_eq!(valor["style"]["border"]["width"], "heavy");
+        assert_eq!(valor["style"]["border"]["color"], "scheme");
+        assert_eq!(
+            normalized(&valor.to_string()),
+            valor,
+            "estable en la segunda vuelta"
+        );
+    }
+
+    #[test]
+    fn el_contenido_de_fabrica_trae_el_borde_de_siempre() {
+        let contenido = Manager::default_content().expect("se serializa");
+        let valor: serde_json::Value = serde_json::from_str(&contenido).expect("parsea");
+        assert_eq!(
+            valor["style"]["border"],
+            serde_json::json!({ "width": "normal", "color": "scheme" })
+        );
+    }
+}

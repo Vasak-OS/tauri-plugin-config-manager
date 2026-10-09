@@ -95,6 +95,11 @@ pub struct Style {
     pub color_scheme: String,
     #[serde(default = "default_radius")]
     pub radius: u32,
+    /// El borde de afuera de las ventanas, el panel y los emergentes del
+    /// escritorio. A un archivo anterior a esta clave se le completa con el
+    /// borde de siempre: fino y del color del esquema.
+    #[serde(default)]
+    pub border: Border,
     /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
     /// Ver [`VSKConfig::extra`].
     #[serde(flatten, default)]
@@ -116,6 +121,48 @@ impl Default for Style {
             darkmode: false,
             color_scheme: default_color_scheme(),
             radius: default_radius(),
+            border: Border::default(),
+            extra: serde_json::Map::new(),
+        }
+    }
+}
+
+/// El borde de afuera: el de la ventana entera, el panel, el centro de control
+/// y los emergentes del escritorio. Los bordes de adentro de cada aplicación no
+/// lo siguen.
+///
+/// Son cadenas y no enumeraciones a propósito: un valor que el modelo no
+/// conozca —una errata a mano, o uno que sume una versión futura— haría
+/// ilegible el archivo entero, y el que no parsea se aparta y se repone con
+/// los valores de fábrica. Quien lo aplica (`windowBorderProperties`, en
+/// `guest-js`) trata lo desconocido como el valor de fábrica.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Border {
+    /// `normal` (1 px), `thick` (2 px) o `heavy` (3 px).
+    #[serde(default = "default_border_width")]
+    pub width: String,
+    /// `scheme` (el canto translúcido del esquema) o `accent` (el primario).
+    #[serde(default = "default_border_color")]
+    pub color: String,
+    /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
+    /// Ver [`VSKConfig::extra`].
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+fn default_border_width() -> String {
+    "normal".to_string()
+}
+
+fn default_border_color() -> String {
+    "scheme".to_string()
+}
+
+impl Default for Border {
+    fn default() -> Self {
+        Self {
+            width: default_border_width(),
+            color: default_border_color(),
             extra: serde_json::Map::new(),
         }
     }

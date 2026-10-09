@@ -207,11 +207,72 @@ export function pilaDeFuente(
   return `'${limpio}', ${generica}`;
 }
 
+/**
+ * El grosor del borde de afuera: `normal` es 1 px, `thick` 2 px y `heavy`
+ * 3 px.
+ */
+export type WindowBorderWidth = "normal" | "thick" | "heavy";
+
+/** Los píxeles de cada grosor. */
+const WINDOW_BORDER_PIXELS: Record<WindowBorderWidth, string> = {
+  normal: "1px",
+  thick: "2px",
+  heavy: "3px",
+};
+
+/**
+ * El color del borde de afuera: `scheme` es el canto translúcido de siempre
+ * (`ui-line`) y `accent`, el color primario del esquema.
+ */
+export type WindowBorderColor = "scheme" | "accent";
+
+export type WindowBorder = {
+  width: WindowBorderWidth;
+  color: WindowBorderColor;
+};
+
+/** Lo que escribe el store en `:root` para el borde de afuera. */
+export type WindowBorderProperties = {
+  /** Va a `--window-border-width`. */
+  width: string;
+  /** Va a `--ui-window-border`; `null` la quita y queda el color del esquema. */
+  color: string | null;
+};
+
+/**
+ * Las dos variables del borde de afuera —el de la ventana entera, el panel, el
+ * centro de control y los emergentes del escritorio— a partir de
+ * `style.border`.
+ *
+ * El color de acento se escribe como `var(--use-primary)` y no como el color
+ * resuelto: así sigue al modo oscuro, que cambia `--use-primary` en el mismo
+ * `:root`, sin que haya que volver a escribirlo. El del esquema es la ausencia
+ * de la variable: el respaldo lo pone `tokens.css` de vue-libvasak.
+ *
+ * Lo que no se reconoce —un archivo anterior a la clave, una errata a mano—
+ * cae en el borde de siempre: fino y del color del esquema. Nunca deja la
+ * ventana sin borde.
+ */
+export function windowBorderProperties(
+  border: Partial<WindowBorder> | null | undefined,
+): WindowBorderProperties {
+  return {
+    width:
+      border?.width !== undefined &&
+      Object.prototype.hasOwnProperty.call(WINDOW_BORDER_PIXELS, border.width)
+        ? WINDOW_BORDER_PIXELS[border.width]
+        : WINDOW_BORDER_PIXELS.normal,
+    color: border?.color === "accent" ? "var(--use-primary)" : null,
+  };
+}
+
 export type VSKConfig = {
   style: {
     darkmode: boolean;
     "color-scheme": string;
     radius: number;
+    /** Ausente en archivos anteriores: ahí vale el borde de siempre. */
+    border?: WindowBorder;
   };
   desktop: {
     wallpaper: string[];
@@ -648,6 +709,23 @@ const definirConfigStore = () =>
         document.documentElement.style.setProperty(
           "--corner-radius",
           `${radius}px`,
+        );
+      }
+
+      // El borde de afuera, fuera del bloque del esquema: no depende de que el
+      // esquema se haya podido leer, y quitarlo de la configuración tiene que
+      // devolver el de siempre en las ventanas abiertas.
+      const borde = windowBorderProperties(config.value?.style?.border);
+      document.documentElement.style.setProperty(
+        "--window-border-width",
+        borde.width,
+      );
+      if (borde.color === null) {
+        document.documentElement.style.removeProperty("--ui-window-border");
+      } else {
+        document.documentElement.style.setProperty(
+          "--ui-window-border",
+          borde.color,
         );
       }
 
