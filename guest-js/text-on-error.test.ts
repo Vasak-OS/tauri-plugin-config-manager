@@ -43,6 +43,11 @@ beforeEach(() => {
 			style: {
 				fontFamily: '',
 				setProperty: (name: string, value: string) => written.set(name, value),
+				// El store quita `--ui-window-border` con el borde del esquema.
+				removeProperty: (name: string) => {
+					written.delete(name);
+					return '';
+				},
 			},
 		},
 	};
