@@ -113,13 +113,30 @@ export function textOn(
  * El borde del esquema es un separador decorativo —el de VasakOS da 1.14 contra el
  * fondo— y con eso el contorno de un campo no se ve. Se busca en la paleta uno que
  * llegue a 3:1 sin ser tan fuerte como el texto.
+ *
+ * Se mide contra **los dos** fondos, como el foco ([`focusOn`]): un control no
+ * vive siempre sobre `background`, también sobre los paneles y las tarjetas, que
+ * son `surface`. Un borde que se ve contra el fondo puede desaparecer contra la
+ * superficie: el `#7c7f93` que los `main.css` tenían fijo daba 3,49:1 contra el
+ * fondo de fábrica y 2,56:1 contra la superficie. Entre los que llegan a los dos
+ * gana el de mejor **peor caso**, que es el que decide si se ve. Las mezclas
+ * intermedias (`bg-ui-surface/70`) quedan entre los dos extremos.
  */
 export function strongBorderOn(palette: UiColors): string | null {
-  return bestOn(
-    palette.background,
-    [palette.text.muted, palette.surface, palette.text.main],
-    MIN_NON_TEXT_CONTRAST,
-  );
+  const fondos = [palette.background, palette.surface];
+  const peor = (color: string) => Math.min(...fondos.map((fondo) => contrastRatio(color, fondo)));
+
+  let elegido: string | null = null;
+  let mejor = 0;
+  for (const color of [palette.text.muted, palette.surface, palette.text.main]) {
+    if (!color) continue;
+    const alcanza = peor(color);
+    if (alcanza >= MIN_NON_TEXT_CONTRAST && alcanza > mejor) {
+      mejor = alcanza;
+      elegido = color;
+    }
+  }
+  return elegido;
 }
 
 /**

@@ -111,6 +111,61 @@ describe('bordeFuerteSobre', () => {
 		}
 	});
 
+	it('el borde se percibe también sobre la superficie, no sólo sobre el fondo', () => {
+		// El control no vive siempre sobre el fondo: los paneles y las ventanas
+		// están hechos de `surface`. Se comprobaba el contraste contra el fondo y
+		// nada más, así que un borde que se percibía bien contra el fondo pero
+		// invisible contra la superficie pasaba el test. Con la omisión por defecto
+		// de VasakOS ese valor era 3.49:1 contra el fondo y 2.56:1 contra la
+		// superficie — o sea, invisible justo donde hay más controles.
+		for (const paleta of [oscura, clara]) {
+			const borde = bordeFuerteSobre(paleta) as string;
+			expect(contraste(borde, paleta.surface)).toBeGreaterThanOrEqual(MINIMO_NO_TEXTO);
+		}
+	});
+
+	it('no alcanza con perceptible contra el fondo si no lo es contra la superficie', () => {
+		// `#7c7f93` era el valor por omisión de `--ui-border-strong` en todos los
+		// `main.css`, y es el contraejemplo exacto: pasa contra el fondo y falla
+		// contra la superficie. Antes, la función lo devolvía como borde
+		// "válido" porque sólo miraba el fondo, y con eso el contorno de un
+		// control quedaba invisible en el interior de un panel. Ninguno de los
+		// tres candidatos llega a los dos lados, así que tiene que devolver `null`
+		// y dejar que el CSS use su valor por omisión.
+		const traicionera = {
+			color: { primary: '#dd7878', secondary: '#8839ef' },
+			text: { main: '#7c7f93', muted: '#7c7f93', 'on-primary': '#1e1e2e' },
+			background: '#eff1f5',
+			border: '#dce0e8',
+			surface: '#ccd0da',
+		};
+		expect(contraste('#7c7f93', traicionera.background)).toBeGreaterThanOrEqual(MINIMO_NO_TEXTO);
+		expect(contraste('#7c7f93', traicionera.surface)).toBeLessThan(MINIMO_NO_TEXTO);
+		expect(bordeFuerteSobre(traicionera)).toBeNull();
+	});
+
+	it('elige el que se ve sobre los dos y no el que más destaca contra el fondo', () => {
+		// Una paleta de fondo blanco con paneles oscuros: el negro del texto es el
+		// que más contrasta contra el fondo (21:1), pero sobre la superficie casi
+		// desaparece. El gris apagado contrasta menos contra el fondo y aun así
+		// llega a 3:1 en los dos lados, así que es el único borde que sirve en
+		// todas partes.
+		const paneles = {
+			color: { primary: '#1e66f5', secondary: '#8839ef' },
+			text: { main: '#000000', muted: '#767676', 'on-primary': '#ffffff' },
+			background: '#ffffff',
+			border: '#eeeeee',
+			surface: '#2a2a2a',
+		};
+		const { main, muted } = paneles.text;
+		expect(contraste(main, paneles.background)).toBeGreaterThan(contraste(muted, paneles.background));
+		expect(contraste(main, paneles.surface)).toBeLessThan(MINIMO_NO_TEXTO);
+		expect(contraste(muted, paneles.background)).toBeGreaterThanOrEqual(MINIMO_NO_TEXTO);
+		expect(contraste(muted, paneles.surface)).toBeGreaterThanOrEqual(MINIMO_NO_TEXTO);
+
+		expect(bordeFuerteSobre(paneles)).toBe(muted);
+	});
+
 	it('devuelve null si la paleta no tiene nada que llegue', () => {
 		// Y quien llama deja el valor por omisión del CSS en lugar de escribir algo
 		// que tampoco se ve.
