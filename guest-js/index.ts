@@ -94,6 +94,19 @@ export {
 } from "./contrast";
 
 /**
+ * Escribe una variable derivada, o la **quita** si no hay valor: si el esquema
+ * anterior sí tenía uno, dejarlo taparía el respaldo en CSS de la librería con
+ * un color calculado para otros colores.
+ */
+function writeOptional(name: string, value: string | null): void {
+  if (value) {
+    document.documentElement.style.setProperty(name, value);
+  } else {
+    document.documentElement.style.removeProperty(name);
+  }
+}
+
+/**
  * Los nombres de antes del contraste, para las aplicaciones que ya los usan.
  * Son los mismos valores y las mismas funciones; lo nuevo va con los nombres en
  * inglés de `contrast.ts`. Se quitan cuando ningún consumidor los use (en una
@@ -523,24 +536,11 @@ const definirConfigStore = () =>
             // Sin color se **quita** la variable, no se deja como estaba: si el
             // esquema anterior sí tenía uno, quedaría pegado y taparía el
             // respaldo con un foco calculado para otros colores.
-            const foco = focusOn(ui);
-            if (foco) {
-              document.documentElement.style.setProperty(`--ui-focus${sufijo}`, foco);
-            } else {
-              document.documentElement.style.removeProperty(`--ui-focus${sufijo}`);
-            }
+            writeOptional(`--ui-focus${sufijo}`, focusOn(ui));
 
             // Lo mismo que el foco: sin borde que llegue, se quita el del
             // esquema anterior.
-            const borde = strongBorderOn(ui);
-            if (borde) {
-              document.documentElement.style.setProperty(
-                `--ui-border-strong${sufijo}`,
-                borde,
-              );
-            } else {
-              document.documentElement.style.removeProperty(`--ui-border-strong${sufijo}`);
-            }
+            writeOptional(`--ui-border-strong${sufijo}`, strongBorderOn(ui));
           }
 
           // Status Colors
