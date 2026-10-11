@@ -519,17 +519,27 @@ const definirConfigStore = () =>
             // El anillo de foco, teñido de la marca y con 3:1 contra el fondo y
             // la superficie. Sin esto vue-libvasak usa su respaldo en CSS, que
             // con un acento claro queda justo.
+            //
+            // Sin color se **quita** la variable, no se deja como estaba: si el
+            // esquema anterior sí tenía uno, quedaría pegado y taparía el
+            // respaldo con un foco calculado para otros colores.
             const foco = focusOn(ui);
             if (foco) {
               document.documentElement.style.setProperty(`--ui-focus${sufijo}`, foco);
+            } else {
+              document.documentElement.style.removeProperty(`--ui-focus${sufijo}`);
             }
 
+            // Lo mismo que el foco: sin borde que llegue, se quita el del
+            // esquema anterior.
             const borde = strongBorderOn(ui);
             if (borde) {
               document.documentElement.style.setProperty(
                 `--ui-border-strong${sufijo}`,
                 borde,
               );
+            } else {
+              document.documentElement.style.removeProperty(`--ui-border-strong${sufijo}`);
             }
           }
 

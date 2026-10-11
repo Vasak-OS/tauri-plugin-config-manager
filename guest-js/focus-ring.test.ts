@@ -7,6 +7,7 @@ import {
 	MIN_NON_TEXT_CONTRAST,
 	mixHex,
 	type SchemeData,
+	strongBorderOn,
 	type UiColors,
 	useConfigStore,
 } from './index';
@@ -141,6 +142,61 @@ describe('--ui-focus al aplicar el esquema', () => {
 
 		expect(written.has('--ui-focus')).toBe(false);
 		expect(written.get('--ui-focus-dark')).toBe('#eba0ac');
+	});
+});
+
+/**
+ * Cambiar de esquema: lo que el anterior escribió y el nuevo no puede calcular
+ * se **quita**. Si quedara, taparía el respaldo en CSS de vue-libvasak con un
+ * color pensado para otro fondo (señalado por CodeRabbit en el PR #34).
+ *
+ * Por eso cada prueba aplica dos esquemas sobre el mismo `document`: el de
+ * fábrica, que sí escribe las dos variantes, y después uno con la clara rota.
+ */
+describe('al pasar de un esquema que llega a uno que no', () => {
+	/** Rompe la variante clara: todo casi igual al fondo `#eff1f5`. */
+	function romperClaro() {
+		scheme = structuredClone(vasakDefault);
+		scheme.id = 'roto';
+		scheme.colors.light.ui.text.main = '#e6e9ef';
+		scheme.colors.light.ui.text.muted = '#e6e9ef';
+		scheme.colors.light.ui.color.primary = '#dce0e8';
+		scheme.colors.light.ui.surface = '#e6e9ef';
+	}
+
+	test('el --ui-focus del esquema anterior no queda pegado y el oscuro se conserva', async () => {
+		await useConfigStore().loadConfig();
+		expect(written.has('--ui-focus')).toBe(true);
+		const focoOscuro = written.get('--ui-focus-dark');
+		expect(focoOscuro).toBeDefined();
+
+		romperClaro();
+		expect(focusOn(scheme.colors.light.ui)).toBeNull();
+		setActivePinia(createPinia());
+		await useConfigStore().loadConfig();
+
+		expect(written.has('--ui-focus')).toBe(false);
+		expect(written.get('--ui-focus-dark')).toBe(focoOscuro!);
+	});
+
+	test('el --ui-border-strong del esquema anterior no queda pegado y el oscuro se conserva', async () => {
+		await useConfigStore().loadConfig();
+		expect(written.has('--ui-border-strong')).toBe(true);
+		const bordeOscuro = written.get('--ui-border-strong-dark');
+		expect(bordeOscuro).toBeDefined();
+
+		romperClaro();
+		// Ninguno de los tres candidatos llega a 3:1 contra el fondo claro.
+		const claro = scheme.colors.light.ui;
+		for (const candidato of [claro.text.muted, claro.surface, claro.text.main]) {
+			expect(contrastRatio(candidato, claro.background)).toBeLessThan(MIN_NON_TEXT_CONTRAST);
+		}
+		expect(strongBorderOn(claro)).toBeNull();
+		setActivePinia(createPinia());
+		await useConfigStore().loadConfig();
+
+		expect(written.has('--ui-border-strong')).toBe(false);
+		expect(written.get('--ui-border-strong-dark')).toBe(bordeOscuro!);
 	});
 });
 
