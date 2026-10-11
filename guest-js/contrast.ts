@@ -5,6 +5,7 @@
  * (`contraste`, `textoSobre`…) siguen exportados desde `index.ts` como alias.
  */
 
+import { hexToRgb, rgbToHex } from "./color-space";
 import type { UiColors } from "./index";
 
 /**
@@ -119,4 +120,48 @@ export function strongBorderOn(palette: UiColors): string | null {
     [palette.text.muted, palette.surface, palette.text.main],
     MIN_NON_TEXT_CONTRAST,
   );
+}
+
+/**
+ * Mezcla `from` con `to` en sRGB: `amount` es cuánto de `to` (0 = `from` tal
+ * cual). Es la misma cuenta que `color-mix(in srgb, …)`, para que el color
+ * calculado acá y el respaldo en CSS de vue-libvasak hablen el mismo idioma.
+ */
+export function mixHex(from: string, to: string, amount: number): string | null {
+  const a = hexToRgb(from);
+  const b = hexToRgb(to);
+  if (!a || !b) return null;
+  const t = Math.min(1, Math.max(0, amount));
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * t,
+    g: a.g + (b.g - a.g) * t,
+    b: a.b + (b.b - a.b) * t,
+  });
+}
+
+/**
+ * El anillo de foco (`--ui-focus`), teñido de la marca y visible.
+ *
+ * WCAG 1.4.11 pide 3:1 para un indicador de foco, contra lo que tenga al lado:
+ * el fondo de la ventana y la superficie de los paneles. El primario a secas no
+ * llega siempre —el de fábrica, `#dd7878` sobre `#eff1f5`, da 2,64:1—, así que
+ * se parte de él y se lo acerca al texto principal de a 5 % hasta que llega a
+ * los dos. Gana el primero que cumple: es el más parecido al acento.
+ *
+ * Hacia el texto y no hacia negro o blanco: el texto principal es, en cualquier
+ * esquema, el color de más contraste con el fondo que la paleta ya eligió, así
+ * que el camino siempre termina en algo que se lee y nunca se sale de la
+ * familia de colores. Si ni el texto llega —un esquema roto—, `null`, y queda
+ * el respaldo en CSS de la librería.
+ */
+export function focusOn(palette: UiColors): string | null {
+  const fondos = [palette.background, palette.surface];
+  const llega = (color: string) =>
+    fondos.every((fondo) => contrastRatio(color, fondo) >= MIN_NON_TEXT_CONTRAST);
+
+  for (let paso = 0; paso <= 20; paso++) {
+    const color = mixHex(palette.color.primary, palette.text.main, paso / 20);
+    if (color && llega(color)) return color;
+  }
+  return null;
 }

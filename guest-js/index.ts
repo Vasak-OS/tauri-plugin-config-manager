@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { strongBorderOn, textOn } from "./contrast";
+import { focusOn, strongBorderOn, textOn } from "./contrast";
 
 export * from "./color-space";
 export * from "./scheme-patch";
@@ -84,9 +84,11 @@ export async function saveUserScheme(scheme: SchemeData): Promise<Scheme> {
 export {
   bestOn,
   contrastRatio,
+  focusOn,
   luminance,
   MIN_NON_TEXT_CONTRAST,
   MIN_TEXT_CONTRAST,
+  mixHex,
   strongBorderOn,
   textOn,
 } from "./contrast";
@@ -513,6 +515,14 @@ const definirConfigStore = () =>
               `--text-on-error${sufijo}`,
               textOn(variante.terminal.ansi.red, undefined, ui),
             );
+
+            // El anillo de foco, teñido de la marca y con 3:1 contra el fondo y
+            // la superficie. Sin esto vue-libvasak usa su respaldo en CSS, que
+            // con un acento claro queda justo.
+            const foco = focusOn(ui);
+            if (foco) {
+              document.documentElement.style.setProperty(`--ui-focus${sufijo}`, foco);
+            }
 
             const borde = strongBorderOn(ui);
             if (borde) {
