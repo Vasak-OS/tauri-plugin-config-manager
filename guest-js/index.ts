@@ -183,6 +183,45 @@ export function primeraUtil(
   return candidatos.map(limpiar).find((nombre) => nombre !== "") ?? "";
 }
 
+/** El texto más chico que se aplica: por debajo no se lee. */
+export const ESCALA_MINIMA = 0.75;
+/** El más grande: por encima las ventanas de tamaño fijo se rompen. */
+export const ESCALA_MAXIMA = 2;
+
+/**
+ * La escala del texto que se aplica: la configurada, entre el mínimo y el
+ * máximo, o `1` si no es un número finito.
+ *
+ * Los mismos límites que el lado de Rust (`Fonts::effective_scale`): el número
+ * que ven las aplicaciones propias y el que reciben GTK y Qt por `gsettings`
+ * tienen que ser el mismo.
+ */
+export function escalaDeFuente(valor: unknown): number {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) {
+    return 1;
+  }
+  return Math.min(ESCALA_MAXIMA, Math.max(ESCALA_MINIMA, valor));
+}
+
+/**
+ * Lo que se escribe en el elemento raíz para una escala: la variable, y el
+ * tamaño de letra base en porcentaje —que es lo que mueven todos los `rem`—.
+ *
+ * Con la escala en `1` el tamaño base es `null`: no se escribe nada, y quien
+ * lo tenía puesto lo pierde. Una aplicación que fija el suyo en su hoja de
+ * estilo lo conserva, en vez de ver pisado un 100 % que nadie pidió.
+ */
+export function propiedadesDeEscala(valor: unknown): {
+  variable: string;
+  tamanoBase: string | null;
+} {
+  const escala = escalaDeFuente(valor);
+  return {
+    variable: String(escala),
+    tamanoBase: escala === 1 ? null : `${Math.round(escala * 100)}%`,
+  };
+}
+
 /**
  * La pila de fuentes para un rol, lista para `font-family`.
  *
@@ -307,6 +346,12 @@ export type VSKConfig = {
     terminal: string;
     title: string;
     apps: string;
+    /**
+     * El tamaño del texto de todo el escritorio, como factor: `1` es el de
+     * siempre. Opcional porque un archivo de antes no lo trae; el plugin lo
+     * completa con `1` al leerlo.
+     */
+    scale?: number;
   };
   icons: {
     dark: string;
@@ -784,6 +829,15 @@ const definirConfigStore = () =>
       // nada lo dijera. Las utilidades de Tailwind lo pisan donde se usen, que
       // es lo que se busca para el título y la terminal.
       root.fontFamily = deApps;
+
+      // El tamaño del texto, para toda aplicación que mida en `rem`.
+      const escala = propiedadesDeEscala(fuentes?.scale);
+      root.setProperty("--vsk-font-scale", escala.variable);
+      if (escala.tamanoBase === null) {
+        root.removeProperty("font-size");
+      } else {
+        root.fontSize = escala.tamanoBase;
+      }
     };
 
     return {

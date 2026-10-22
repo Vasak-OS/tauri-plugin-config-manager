@@ -169,6 +169,21 @@ pub fn con_familia(actual: &str, familia: &str) -> String {
     format!("{familia} {cuerpo}")
 }
 
+/// La escala del texto como la espera `gsettings`: un decimal, con dos cifras.
+pub fn escala_para_gsettings(scale: f64) -> String {
+    format!("{scale:.2}")
+}
+
+/// Si lo que `gsettings get` contestó ya es esta escala. Una respuesta que no es
+/// un número —el esquema no está, el binario falló— nunca coincide, así que se
+/// escribe.
+pub fn misma_escala(actual: &str, scale: f64) -> bool {
+    actual
+        .trim()
+        .parse::<f64>()
+        .is_ok_and(|actual| (actual - scale).abs() < 0.005)
+}
+
 /// Deja la fuente de la interfaz en el `settings.ini` de cada versión de GTK.
 ///
 /// Es la mitad que faltaba de «aplicar fuentes»: la pantalla de Ajustes escribía
@@ -306,6 +321,22 @@ pub fn apply(darkmode: bool, icon_pack: &str) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_escala_va_a_gsettings_con_dos_decimales() {
+        assert_eq!(escala_para_gsettings(1.0), "1.00");
+        assert_eq!(escala_para_gsettings(1.25), "1.25");
+        assert_eq!(escala_para_gsettings(0.75), "0.75");
+    }
+
+    #[test]
+    fn la_misma_escala_no_se_vuelve_a_escribir() {
+        assert!(misma_escala("1.0", 1.0));
+        assert!(misma_escala("1.25\n", 1.25));
+        assert!(!misma_escala("1.0", 1.25));
+        assert!(!misma_escala("", 1.0), "sin respuesta se escribe");
+        assert!(!misma_escala("no es un numero", 1.0));
+    }
+
     use super::*;
 
     const UPDATES: &[(&str, &str)] = &[
