@@ -129,12 +129,7 @@ impl<R: Runtime> ConfigManager<R> {
                 showhiddenfiles: false,
                 extra: Default::default(),
             }),
-            fonts: Fonts {
-                terminal: String::new(),
-                title: String::new(),
-                apps: String::new(),
-                extra: Default::default(),
-            },
+            fonts: Fonts::default(),
             icons: Icons {
                 dark: String::new(),
                 light: String::new(),
@@ -511,6 +506,8 @@ impl<R: Runtime> ConfigManager<R> {
             ("monospace-font-name", fonts.terminal.trim()),
         ];
 
+        Self::try_apply_text_scale(fonts.effective_scale());
+
         for (key, family) in keys {
             if family.is_empty() {
                 continue;
@@ -528,6 +525,31 @@ impl<R: Runtime> ConfigManager<R> {
             {
                 tracing::error!("Could not set GNOME {}: {}", key, e);
             }
+        }
+    }
+
+    /// El tamaño del texto para las aplicaciones GTK y Qt, que lo leen de
+    /// `text-scaling-factor`. Las propias lo toman de `vasak.conf` (ver el
+    /// `guest-js`), así que las dos mitades salen del mismo número.
+    ///
+    /// Sólo se escribe si cambió: cada `gsettings set` avisa a todas las
+    /// aplicaciones abiertas, y guardar la configuración por otro motivo no
+    /// tiene por qué moverles el texto.
+    #[cfg(feature = "system-theme-sync")]
+    fn try_apply_text_scale(scale: f64) {
+        let key = "text-scaling-factor";
+        let current =
+            Self::run_gsettings(&["get", "org.gnome.desktop.interface", key]).unwrap_or_default();
+        if crate::gtk_settings::misma_escala(current.trim(), scale) {
+            return;
+        }
+        if let Err(e) = Self::run_gsettings(&[
+            "set",
+            "org.gnome.desktop.interface",
+            key,
+            &crate::gtk_settings::escala_para_gsettings(scale),
+        ]) {
+            tracing::error!("Could not set GNOME {}: {}", key, e);
         }
     }
 

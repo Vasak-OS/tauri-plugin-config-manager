@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { pilaDeFuente, primeraUtil } from './index';
+import {
+	ESCALA_MAXIMA,
+	ESCALA_MINIMA,
+	escalaDeFuente,
+	pilaDeFuente,
+	primeraUtil,
+	propiedadesDeEscala,
+} from './index';
 
 /**
  * Las tres fuentes que ofrece Configuración —título, aplicaciones y terminal—
@@ -100,5 +107,32 @@ describe('la cascada entre candidatos', () => {
 
 	test('devuelve el nombre saneado, no el crudo', () => {
 		expect(primeraUtil('  Noto Sans  ')).toBe('Noto Sans');
+	});
+});
+
+describe('la escala del texto', () => {
+	test('sin valor, o con algo que no es un número, vale uno', () => {
+		for (const raro of [undefined, null, '1.5', 'grande', NaN, Infinity, -Infinity, {}, []]) {
+			expect(escalaDeFuente(raro)).toBe(1);
+		}
+	});
+
+	test('se acota al mínimo y al máximo, los mismos que el lado de Rust', () => {
+		expect(escalaDeFuente(0.1)).toBe(ESCALA_MINIMA);
+		expect(escalaDeFuente(-2)).toBe(ESCALA_MINIMA);
+		expect(escalaDeFuente(9)).toBe(ESCALA_MAXIMA);
+		expect(escalaDeFuente(1.25)).toBe(1.25);
+		expect([ESCALA_MINIMA, ESCALA_MAXIMA]).toEqual([0.75, 2]);
+	});
+
+	test('a uno no se escribe un tamaño base, para no pisar el de la aplicación', () => {
+		expect(propiedadesDeEscala(1)).toEqual({ variable: '1', tamanoBase: null });
+		expect(propiedadesDeEscala(undefined)).toEqual({ variable: '1', tamanoBase: null });
+	});
+
+	test('el tamaño base es el porcentaje de la escala', () => {
+		expect(propiedadesDeEscala(1.25)).toEqual({ variable: '1.25', tamanoBase: '125%' });
+		expect(propiedadesDeEscala(0.8)).toEqual({ variable: '0.8', tamanoBase: '80%' });
+		expect(propiedadesDeEscala(9)).toEqual({ variable: '2', tamanoBase: '200%' });
 	});
 });

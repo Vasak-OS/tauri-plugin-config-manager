@@ -31,7 +31,29 @@ pub struct VSKConfig {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+/// El tamaño del texto más chico que se acepta: por debajo no se lee.
+pub const MIN_FONT_SCALE: f64 = 0.75;
+/// El más grande: por encima las ventanas de tamaño fijo se rompen.
+pub const MAX_FONT_SCALE: f64 = 2.0;
+
+fn default_font_scale() -> f64 {
+    1.0
+}
+
+/// La escala tal como está escrita, o `1.0` si no es un número.
+///
+/// Tolerante a propósito: un archivo con `"scale": "grande"` que no parseara
+/// costaría el archivo entero —se aparta a `.roto` y se repone, con el fondo y
+/// los widgets de quien lo tuviera—, y una escala mal escrita no vale eso.
+fn lenient_font_scale<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value.as_f64().unwrap_or_else(default_font_scale))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Fonts {
     #[serde(default)]
     pub terminal: String,
@@ -39,10 +61,43 @@ pub struct Fonts {
     pub title: String,
     #[serde(default)]
     pub apps: String,
+    /// El tamaño del texto de todo el escritorio, como factor: `1.0` es el de
+    /// siempre. Con su propio valor de fábrica —`#[serde(default)]` daría `0.0`,
+    /// que dejaría el texto sin tamaño— y sin pasar de [`MIN_FONT_SCALE`] y
+    /// [`MAX_FONT_SCALE`] al aplicarse (ver [`Fonts::effective_scale`]).
+    #[serde(
+        default = "default_font_scale",
+        deserialize_with = "lenient_font_scale"
+    )]
+    pub scale: f64,
     /// Lo que el modelo no conoce, para que sobreviva a la reserialización.
     /// Ver [`VSKConfig::extra`].
     #[serde(flatten, default)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for Fonts {
+    fn default() -> Self {
+        Self {
+            terminal: String::new(),
+            title: String::new(),
+            apps: String::new(),
+            scale: default_font_scale(),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Fonts {
+    /// La escala que se aplica: la escrita, entre el mínimo y el máximo, o `1.0`
+    /// si no es un número finito.
+    pub fn effective_scale(&self) -> f64 {
+        if self.scale.is_finite() {
+            self.scale.clamp(MIN_FONT_SCALE, MAX_FONT_SCALE)
+        } else {
+            default_font_scale()
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -304,4 +359,59 @@ pub struct AnsiColors {
     /// Ver [`SchemeData::extra`].
     #[serde(flatten, default)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fonts(json: &str) -> Fonts {
+        serde_json::from_str(json).expect("parsea")
+    }
+
+    #[test]
+    fn sin_escala_vale_uno() {
+        assert_eq!(fonts("{}").scale, 1.0);
+        assert_eq!(fonts(r#"{"apps":"Noto Sans"}"#).effective_scale(), 1.0);
+        assert_eq!(Fonts::default().scale, 1.0);
+    }
+
+    #[test]
+    fn la_escala_escrita_se_lee_y_se_conserva_al_reescribir() {
+        let leida = fonts(r#"{"scale":1.25}"#);
+        assert_eq!(leida.scale, 1.25);
+
+        let reescrita: serde_json::Value = serde_json::to_value(&leida).unwrap();
+        assert_eq!(reescrita["scale"], 1.25);
+    }
+
+    #[test]
+    fn una_escala_que_no_es_un_numero_no_cuesta_el_archivo() {
+        // Un archivo que no parsea se aparta y se repone: se llevaría el fondo y
+        // los widgets de quien lo tuviera, por una escala mal escrita.
+        for raro in [r#""grande""#, "null", "true", "[]", "{}"] {
+            let config = fonts(&format!(r#"{{"scale":{raro}}}"#));
+            assert_eq!(config.effective_scale(), 1.0, "con {raro}");
+        }
+    }
+
+    #[test]
+    fn la_escala_se_acota_al_aplicarse() {
+        assert_eq!(fonts(r#"{"scale":0.1}"#).effective_scale(), MIN_FONT_SCALE);
+        assert_eq!(fonts(r#"{"scale":9}"#).effective_scale(), MAX_FONT_SCALE);
+        assert_eq!(fonts(r#"{"scale":-3}"#).effective_scale(), MIN_FONT_SCALE);
+        let infinita = Fonts {
+            scale: f64::NAN,
+            ..Fonts::default()
+        };
+        assert_eq!(infinita.effective_scale(), 1.0);
+    }
+
+    #[test]
+    fn lo_que_el_modelo_no_conoce_sigue_pasando() {
+        let leida = fonts(r#"{"scale":1.5,"otra":"cosa"}"#);
+
+        assert_eq!(leida.extra["otra"], "cosa");
+        assert!(!leida.extra.contains_key("scale"));
+    }
 }
